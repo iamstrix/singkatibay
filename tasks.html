@@ -1,0 +1,266 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>SingkaTibay Tasks</title>
+<style>
+:root{
+  --bg:#F4EEF7; --panel:#FFFFFF; --ink:#2A2233; --ink-2:#5E5468; --line:rgba(42,34,51,.14);
+  --accent:#E63946; --accent-2:#1D4ED8; --done:#1F8A4C; --chip:#F1EAF5; color-scheme:light;
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1A1522; --panel:#241D2E; --ink:#F3EEF7; --ink-2:#B9AEC6; --line:rgba(255,255,255,.14);
+    --accent:#FF6B74; --accent-2:#7AA2FF; --done:#5ED38F; --chip:#2E2639; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1A1522; --panel:#241D2E; --ink:#F3EEF7; --ink-2:#B9AEC6; --line:rgba(255,255,255,.14);
+  --accent:#FF6B74; --accent-2:#7AA2FF; --done:#5ED38F; --chip:#2E2639; color-scheme:dark;
+}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:15px/1.45 ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif}
+main{max-width:860px;margin:0 auto;padding:24px 16px 64px}
+header h1{margin:0;font-size:28px;letter-spacing:-.01em}
+header p{margin:4px 0 0;color:var(--ink-2)}
+.overall{margin:16px 0 8px;display:flex;align-items:center;gap:12px}
+.meter{flex:1;height:10px;border-radius:999px;background:var(--chip);overflow:hidden}
+.meter i{display:block;height:100%;background:var(--done);border-radius:999px;transition:width .2s}
+.overall b{font-variant-numeric:tabular-nums;min-width:7ch;text-align:right}
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;margin:12px 0 20px}
+button{font:inherit;color:inherit;cursor:pointer}
+.tb{border:1px solid var(--line);background:var(--panel);border-radius:10px;padding:7px 12px;font-size:14px;font-weight:600}
+.tb[aria-pressed="true"]{background:var(--ink);color:var(--bg);border-color:var(--ink)}
+.phase{margin:28px 0 10px;display:flex;align-items:baseline;gap:10px;flex-wrap:wrap}
+.phase h2{margin:0;font-size:20px}
+.phase span{color:var(--ink-2);font-size:14px}
+section.group{background:var(--panel);border:1px solid var(--line);border-radius:16px;padding:14px 16px;margin:0 0 12px}
+.ghead{display:flex;align-items:center;gap:10px;margin-bottom:6px}
+.ghead h3{margin:0;font-size:16px;flex:1}
+.ghead small{color:var(--ink-2);font-variant-numeric:tabular-nums}
+.gmeter{height:4px;border-radius:999px;background:var(--chip);overflow:hidden;margin-bottom:8px}
+.gmeter i{display:block;height:100%;background:var(--done)}
+ul{list-style:none;margin:0;padding:0}
+li{display:flex;align-items:flex-start;gap:10px;padding:7px 0;border-top:1px solid var(--line)}
+li:first-child{border-top:0}
+li input[type=checkbox]{flex:none;width:18px;height:18px;margin:2px 0 0;accent-color:var(--done);cursor:pointer}
+li label{flex:1;cursor:pointer}
+li label small{display:block;color:var(--ink-2);font-size:13px}
+li.done label{color:var(--ink-2)}
+li.done label .t{text-decoration:line-through}
+.tag{flex:none;font-size:11.5px;font-weight:700;padding:2px 8px;border-radius:999px;background:var(--chip);color:var(--ink-2);white-space:nowrap}
+.tag.p1{background:var(--accent);color:#fff}
+.del{flex:none;border:0;background:none;color:var(--ink-2);font-size:18px;line-height:1;padding:0 4px}
+.del:hover{color:var(--accent)}
+form.add{display:flex;gap:8px;margin-top:8px}
+form.add input{flex:1;min-width:0;border:1px solid var(--line);background:var(--bg);color:var(--ink);border-radius:10px;padding:7px 10px;font:inherit;font-size:14px}
+form.add button{border:1px solid var(--line);background:var(--chip);border-radius:10px;padding:7px 12px;font-size:14px;font-weight:600}
+body.hide-done li.done{display:none}
+.note{color:var(--ink-2);font-size:13px;margin-top:28px}
+:focus-visible{outline:3px solid var(--accent-2);outline-offset:2px}
+</style>
+</head>
+<body>
+<main>
+<header>
+  <h1>SingkaTibay tasks</h1>
+  <p>DOST Level Up 3.0. Submission deadline <b>Oct 25, 2026</b>. Finals <b>Nov 26–27</b>, General Santos City.</p>
+</header>
+<div class="overall"><div class="meter" aria-hidden="true"><i id="allBar"></i></div><b id="allCount"></b></div>
+<div class="toolbar">
+  <button class="tb" id="hideDone" aria-pressed="false">Hide done</button>
+  <button class="tb" id="export">Export progress</button>
+  <button class="tb" id="import">Import progress</button>
+  <button class="tb" id="reset">Clear all checks</button>
+  <input type="file" id="importFile" accept="application/json" hidden>
+</div>
+<div id="list"></div>
+<p class="note">Progress is saved in this browser only. Use Export and Import to share it with your team.</p>
+</main>
+<script>
+(function(){
+// Built-in tasks. Keep ids stable so saved checkmarks survive edits to the text.
+// "p1" marks what must be done before the submission videos are recorded.
+const PHASES = [
+ {id:'pre', name:'Before submission', when:'by Oct 25', groups:[
+  {id:'online', name:'Online: ready flow', tasks:[
+   ['ready-lobby','Ready button for both players after naming in the lobby','Match starts when both are ready, not when the host presses Start','p1'],
+   ['ready-cue-lobby','Show who is ready to the player who is not','e.g. "Ben is ready ✓" in the lobby','p1'],
+   ['ready-cue-rounds','Show the opponent is ready between rounds','The database already tracks this; just display it'],
+   ['locked-cue','Show "opponent locked in" during building','Design choice: adds pressure, reveals lock-in order'],
+  ]},
+  {id:'onboard', name:'Onboarding', tasks:[
+   ['howto-panels','Picture-based how-to screen before round 1','4 panels: random place and disaster, build to prepare, tell your family what to do, best-prepared home wins','p1'],
+   ['howto-art','Make the how-to images from staged in-game scenes','Original art, no outside assets (rules section 6)','p1'],
+   ['howto-wording','Make the win message match scoring','Lives count most: "keep your family safe and your house standing"','p1'],
+   ['howto-button','"?" button to reopen the how-to anytime'],
+   ['tooltips','Tooltips for stats, retrofits, and resident actions'],
+  ]},
+  {id:'balance', name:'Balance', tasks:[
+   ['evac-fallback','Evacuees who don\'t get a space end up worse than staying home','Today they fall back to Duck, Cover, Hold for free','p1'],
+   ['lock-bonus','Shrink the lock-in speed bonus (max 25 → about 10)','','p1'],
+   ['leftover-bonus','Remove or rework the leftover-Pondo bonus','Rewards not building, against the theme','p1'],
+   ['kubo-quake','Give the bahay kubo an earthquake weakness','Kubo + extra posts wins every earthquake','p1'],
+   ['tiebreak','Fair tie-break when both lock in at the same moment','Player 1 currently always wins it'],
+   ['hazard-order','Randomize or choose the hazard order'],
+  ]},
+  {id:'accuracy', name:'Accuracy and grounding', tasks:[
+   ['phivolcs','Reword the "PHIVOLCS earthquake advisory"','PHIVOLCS does not forecast quakes; present it as a hazard assessment (West Valley Fault scenario)','p1'],
+   ['ndrrmc','Mention NDRRMC drills in the "Bakit?" explanations'],
+   ['learn-more','"Learn more" line: PAGASA, PHIVOLCS HazardHunterPH, NDRRMC'],
+   ['disclaimer','Credits line: not affiliated with PAGASA, PHIVOLCS, or NDRRMC'],
+  ]},
+  {id:'audio', name:'Audio', tasks:[
+   ['sfx','Sound effects: rain, rumble, wind, roof tearing, lock-in click, timer warning, results sting','','p1'],
+   ['music','Simple background music','','p1'],
+   ['mute','Mute button','','p1'],
+  ]},
+  {id:'build', name:'Building improvements', tasks:[
+   ['risk-warning','Warn about risky ground in the placement preview','e.g. "2 tiles low ground: water rises 1 level higher"'],
+   ['retro-preview','Hovering a retrofit previews how the stat bars change'],
+   ['defaults','Pre-select a sensible starting house and spot'],
+   ['undo','Undo or reset build'],
+   ['face-island','Rotate the camera to face the active player\'s island'],
+  ]},
+  {id:'code', name:'Code cleanup', tasks:[
+   ['wave-perf','Make the sea waves cheaper on phones','Recomputes normals for ~29k vertices every frame'],
+   ['escape-handler','Remove the empty Escape key handler'],
+  ]},
+  {id:'submit', name:'Submission package', tasks:[
+   ['trailer','Game trailer, 1–2 min .mp4 (loopable)','','p1'],
+   ['demo','Gameplay demo, 3–5 min .mp4 with voice or captions','','p1'],
+   ['form01','Form 01: Game Development Team Roles','','p1'],
+   ['form02','Form 02: Waiver and Declaration of Originality (signed)','','p1'],
+   ['form03','Form 03: Asset and AI Usage Disclosure','three.js r147 (MIT), Supabase, qrcode-generator 1.4.4 (MIT), Bricolage Grotesque (OFL), AI tools used','p1'],
+   ['synopsis','Template 01: Game Title and Synopsis (500 words max)','','p1'],
+   ['register','Register the team on the registration link','','p1'],
+   ['upload','Upload everything before the deadline','','p1'],
+  ]},
+  {id:'ops', name:'Housekeeping', tasks:[
+   ['commit-preview','Commit the house preview / click-to-place change'],
+   ['gitignore','Change .gitignore screenshot lines to image*.png'],
+   ['test-users','Delete the anonymous test users in Supabase'],
+   ['keepalive-1','Open Supabase or play a match a few days before Oct 25','Free projects pause after about a week idle'],
+  ]},
+ ]},
+ {id:'post', name:'Before the finals', when:'by Nov 26', groups:[
+  {id:'class', name:'Class lobbies (10–40 players)', tasks:[
+   ['class-rooms','Rooms with up to 40 players, each on their own copy of the lot'],
+   ['class-evac','Rethink the shared evacuation center for many players'],
+   ['class-board','Live leaderboard for players'],
+   ['class-host','Host / teacher spectator screen showing the top builds'],
+   ['auth-limit','Raise the Supabase guest sign-in rate limit','About 30 per hour per IP by default; a class or venue on one Wi-Fi hits it'],
+  ]},
+  {id:'content', name:'New content', tasks:[
+   ['landslide','Landslide round on a terraced Benguet / Baguio slope','Stable, loose slope, and gully tiles; retaining wall, drainage, vetiver retrofits'],
+   ['tsunami','Earthquake + tsunami round at General Santos / Sarangani Bay'],
+   ['ban-phase','Hazard ban phase and map pool'],
+   ['region-variants','Regional variants of existing hazards'],
+  ]},
+  {id:'polish', name:'Online and polish', tasks:[
+   ['reconnect','Rejoin a match after refreshing the page'],
+   ['rematch','Rematch button after the final screen'],
+   ['results-readable','Readable results for spectators: score count-up, big status icons'],
+   ['tap-confirm','Phones: tap to preview, tap again to place'],
+   ['cleanup-job','Cleanup job for old guest accounts and closed rooms'],
+  ]},
+  {id:'event', name:'Event prep', tasks:[
+   ['poster','Game poster for finalists (dimensions to be announced)'],
+   ['finalist-docs','Finalist requirements: team name, school logo, IDs, proof of enrollment, endorsement letter'],
+   ['venue-test','Plan for venue network: bring a phone hotspot'],
+   ['offline-libs','Consider bundling three.js locally in case the CDN is slow'],
+   ['keepalive-2','Open Supabase or play a match a few days before Nov 26'],
+  ]},
+ ]},
+];
+
+const KEY = 'singkatibay-tasks-v1';
+function load(){ try{ const s = JSON.parse(localStorage.getItem(KEY)); if(s && typeof s==='object') return s; }catch(e){} return {}; }
+let state = Object.assign({done:{}, custom:{}, hideDone:false}, load());
+function save(){ try{ localStorage.setItem(KEY, JSON.stringify(state)); }catch(e){} }
+
+const listEl = document.getElementById('list');
+const el = (tag, props, kids)=>{ const n = document.createElement(tag); Object.assign(n, props||{}); (kids||[]).forEach(k=>n.append(k)); return n; };
+
+function tasksOf(g){ return g.tasks.map(([id,t,sub,tag])=>({id,t,sub,tag})).concat((state.custom[g.id]||[]).map(c=>({...c, custom:true}))); }
+
+function render(){
+  listEl.textContent = '';
+  let all = 0, done = 0;
+  PHASES.forEach(ph=>{
+    listEl.append(el('div',{className:'phase'},[el('h2',{textContent:ph.name}), el('span',{textContent:ph.when})]));
+    ph.groups.forEach(g=>{
+      const ts = tasksOf(g), d = ts.filter(t=>state.done[t.id]).length;
+      all += ts.length; done += d;
+      const sec = el('section',{className:'group'});
+      sec.append(el('div',{className:'ghead'},[el('h3',{textContent:g.name}), el('small',{textContent:d+' / '+ts.length})]));
+      const gm = el('div',{className:'gmeter'},[el('i')]); gm.firstChild.style.width = (ts.length ? d/ts.length*100 : 0)+'%'; sec.append(gm);
+      const ul = el('ul');
+      ts.forEach(t=>{
+        const cid = 'cb-'+t.id;
+        const li = el('li',{className: state.done[t.id] ? 'done' : ''});
+        const cb = el('input',{type:'checkbox', id:cid, checked:!!state.done[t.id]});
+        cb.addEventListener('change',()=>{ if(cb.checked) state.done[t.id]=true; else delete state.done[t.id]; save(); render(); document.getElementById(cid)?.focus(); });
+        const lab = el('label',{htmlFor:cid},[el('span',{className:'t',textContent:t.t})]);
+        if(t.sub) lab.append(el('small',{textContent:t.sub}));
+        li.append(cb, lab);
+        if(t.tag==='p1') li.append(el('span',{className:'tag p1',textContent:'Before recording'}));
+        if(t.custom){
+          li.append(el('span',{className:'tag',textContent:'Added'}));
+          const del = el('button',{className:'del',type:'button',textContent:'×',title:'Remove this task'});
+          del.setAttribute('aria-label','Remove task: '+t.t);
+          del.addEventListener('click',()=>{ state.custom[g.id] = state.custom[g.id].filter(c=>c.id!==t.id); delete state.done[t.id]; save(); render(); });
+          li.append(del);
+        }
+        ul.append(li);
+      });
+      sec.append(ul);
+      const input = el('input',{type:'text', placeholder:'Add a task to '+g.name, maxLength:200});
+      input.setAttribute('aria-label','New task for '+g.name);
+      const form = el('form',{className:'add'},[input, el('button',{type:'submit',textContent:'Add'})]);
+      form.addEventListener('submit',e=>{
+        e.preventDefault();
+        const text = input.value.trim(); if(!text) return;
+        (state.custom[g.id] = state.custom[g.id]||[]).push({id:'c-'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), t:text});
+        save(); render();
+        listEl.querySelector('input[aria-label="New task for '+g.name+'"]')?.focus();
+      });
+      sec.append(form);
+      listEl.append(sec);
+    });
+  });
+  document.getElementById('allBar').style.width = (all ? done/all*100 : 0)+'%';
+  document.getElementById('allCount').textContent = done+' / '+all;
+  document.body.classList.toggle('hide-done', !!state.hideDone);
+  document.getElementById('hideDone').setAttribute('aria-pressed', String(!!state.hideDone));
+}
+
+document.getElementById('hideDone').addEventListener('click',()=>{ state.hideDone = !state.hideDone; save(); render(); });
+document.getElementById('reset').addEventListener('click',()=>{
+  const b = document.getElementById('reset');
+  if(b.dataset.armed){ state.done = {}; save(); render(); delete b.dataset.armed; b.textContent='Clear all checks'; return; }
+  b.dataset.armed = '1'; b.textContent = 'Click again to clear';
+  setTimeout(()=>{ delete b.dataset.armed; b.textContent='Clear all checks'; }, 3000);
+});
+document.getElementById('export').addEventListener('click',()=>{
+  const blob = new Blob([JSON.stringify(state,null,2)],{type:'application/json'});
+  const a = el('a',{href:URL.createObjectURL(blob), download:'singkatibay-tasks.json'}); a.click();
+  setTimeout(()=>URL.revokeObjectURL(a.href), 1000);
+});
+const fileIn = document.getElementById('importFile');
+document.getElementById('import').addEventListener('click',()=>fileIn.click());
+fileIn.addEventListener('change',()=>{
+  const f = fileIn.files[0]; if(!f) return;
+  f.text().then(txt=>{
+    const s = JSON.parse(txt);
+    if(!s || typeof s.done!=='object') throw new Error('bad file');
+    state = Object.assign({done:{}, custom:{}, hideDone:false}, s); save(); render();
+  }).catch(()=>{ document.getElementById('import').textContent = 'Not a valid progress file'; setTimeout(()=>{ document.getElementById('import').textContent='Import progress'; }, 3000); });
+  fileIn.value = '';
+});
+render();
+})();
+</script>
+</body>
+</html>

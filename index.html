@@ -152,6 +152,19 @@ h3{margin:18px 0 8px;font-size:16px;font-weight:800}
 .field input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--chip);color:var(--ink);font:inherit;font-size:18px}
 .field input:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
 .field input.codein{text-align:center;text-transform:uppercase;letter-spacing:.2em;font-weight:800}
+.field input:disabled{opacity:.6}
+.players{list-style:none;margin:14px 0 0;padding:0;display:grid;gap:6px}
+.players li{display:flex;align-items:center;gap:10px;padding:9px 12px;border:1px solid var(--line);border-radius:12px;background:var(--chip)}
+.players .pn{flex:1;font-weight:700;overflow-wrap:anywhere}
+.players .st{font-size:13px;font-weight:700;color:var(--ink-2)}
+.players li.is-ready{border-color:var(--good)}
+.players li.is-ready .st{color:var(--good)}
+.cue{margin:12px 0;min-height:1.45em;text-align:center;font-size:14px;color:var(--ink-2)}
+.cue.on{padding:8px 12px;border-radius:12px;background:var(--gold);color:#2A2233}
+.btn:disabled{opacity:.6;cursor:default}
+@keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,209,102,.9)}50%{box-shadow:0 0 0 6px rgba(255,209,102,0)}}
+.btn.pulse{animation:pulse 1.4s ease-in-out infinite}
+@media (prefers-reduced-motion: reduce){.btn.pulse{animation:none;outline:3px solid var(--gold);outline-offset:2px}}
 </style>
 </head>
 <body>
@@ -1030,7 +1043,7 @@ sheet.addEventListener('click',e=>{
   else if(act==='again') titleScreen();
   else if(act==='host') hostRoom();
   else if(act==='joinform') joinForm('');
-  else if(act==='startMatch') netCall('start_round',{p_room:online.room.id,p_round:0});
+  else if(act==='ready') toggleReady();
   else if(act==='copy') copyLink(b);
   else if(act==='leave') titleScreen();
 });
@@ -1224,24 +1237,56 @@ function qrSvg(text){
   const q = qrcode(0,'M'); q.addData(text); q.make();
   return q.createSvgTag({cellSize:4, margin:2, scalable:true, alt:'QR code that opens this room'});
 }
+// The lobby shell (code, QR, name field, buttons) is drawn once per join state;
+// updateLobby() refreshes the player list and ready cues in place, so typing isn't interrupted.
 function renderLobby(){
   const r = online.room, isHost = online.me===0;
+  const old = document.getElementById('nameIn');
+  const typed = old ? old.value : null, hadFocus = old && document.activeElement===old;
   const mine = online.names[online.uid];
   let h = '<p class="sub" style="text-align:center">Room code</p><div class="code">'+esc(r.code)+'</div>';
   if(isHost && !r.guest){
     h += '<div class="qr">'+qrSvg(joinLink(r.code))+'</div>';
     h += '<p class="note">Scan to join, or open '+esc(location.host+location.pathname)+' and enter the code.</p>';
-    h += '<p class="note"><b>Waiting for a player to join…</b></p>';
-  } else {
-    h += '<p class="note"><b>'+(isHost ? esc(pname(1))+' joined.' : 'You joined '+esc(pname(0))+'’s room.')+'</b></p>';
   }
-  h += '<label class="field"><span>Your name</span><input id="nameIn" maxlength="24" autocomplete="nickname" placeholder="Player '+(online.me+1)+'" value="'+esc(mine && mine!=='Guest' ? mine : '')+'"></label>';
-  h += '<div style="height:16px"></div>';
-  if(isHost && r.guest) h += '<button class="btn p1" data-act="startMatch">Start match</button><div style="height:8px"></div>';
+  h += '<ul class="players" id="lobbyPlayers" aria-live="polite"></ul>';
+  h += '<label class="field"><span>Your name</span><input id="nameIn" maxlength="24" autocomplete="nickname" placeholder="Player '+(online.me+1)+'" value="'+esc(typed!=null ? typed : (mine && mine!=='Guest' ? mine : ''))+'"></label>';
+  h += '<p class="cue" id="lobbyCue" role="status"></p>';
+  h += '<button class="btn" id="readyBtn" data-act="ready">Ready</button><div style="height:8px"></div>';
   if(isHost && !r.guest) h += '<button class="btn ghost" data-act="copy">Copy invite link</button><div style="height:8px"></div>';
-  if(!isHost) h += '<p class="note" style="margin:0 0 12px">Waiting for the host to start the match.</p>';
   h += '<button class="btn ghost" data-act="leave">Leave room</button>';
   showOverlay(h);
+  updateLobby();
+  if(hadFocus) document.getElementById('nameIn').focus();
+}
+function updateLobby(){
+  const r = online.room, me = online.me, opp = 1-me;
+  const ready = [r.ready0, r.ready1], joined = [true, !!r.guest];
+  const list = document.getElementById('lobbyPlayers'); if(!list) return;
+  list.innerHTML = [0,1].map(pi=>
+    '<li class="'+(ready[pi]?'is-ready':'')+'"><span class="dot" style="background:'+TEAM[pi]+'"></span>'+
+    '<span class="pn">'+(joined[pi] ? esc(pname(pi)) : 'Waiting for a player to join…')+'</span>'+
+    (joined[pi] ? '<span class="st">'+(ready[pi] ? 'Ready ✓' : 'Not ready')+'</span>' : '')+'</li>'
+  ).join('');
+  const cue = document.getElementById('lobbyCue'), btn = document.getElementById('readyBtn');
+  let msg = '', nudge = false;
+  if(ready[me]) msg = joined[opp] ? 'Waiting for '+esc(pname(opp))+' to ready up…' : 'You’re ready. The match starts when your opponent joins and readies up.';
+  else if(joined[opp] && ready[opp]){ msg = '<b>'+esc(pname(opp))+' is ready.</b> Press Ready to start!'; nudge = true; }
+  else msg = 'Set your name, then press Ready.';
+  cue.innerHTML = msg; cue.classList.toggle('on', nudge);
+  btn.textContent = ready[me] ? 'Not ready' : 'Ready';
+  btn.className = 'btn ' + (ready[me] ? 'ghost' : (me===0?'p1':'p2')) + (nudge ? ' pulse' : '');
+  btn.disabled = false;
+  document.getElementById('nameIn').disabled = ready[me];
+}
+async function toggleReady(){
+  const btn = document.getElementById('readyBtn'); btn.disabled = true;
+  const wasReady = online.me===0 ? online.room.ready0 : online.room.ready1;
+  try{
+    // save the name first so the opponent sees it as soon as the ready flag arrives
+    if(!wasReady) await saveName(document.getElementById('nameIn').value);
+    syncOnline(await SingkaNet.rpc('set_ready',{p_room:online.room.id, p_ready:!wasReady}));
+  }catch(e){ netError(e); }
 }
 function copyLink(b){
   const link = joinLink(online.room.code);
@@ -1251,9 +1296,10 @@ function copyLink(b){
 }
 function saveName(v){
   v = v.trim().slice(0,24);
-  if(!v || !online) return;
+  if(!v || !online || online.names[online.uid]===v) return Promise.resolve();
   online.names[online.uid] = v;
-  SingkaNet.setName(v).catch(()=>{});
+  updateLobby();
+  return SingkaNet.setName(v).catch(()=>{});
 }
 
 async function pollRoom(){
@@ -1268,7 +1314,7 @@ async function pollRoom(){
 }
 function syncOnline(r){
   if(!online || !r || r.id!==online.room.id) return;
-  const guestChanged = r.guest!==online.room.guest;
+  const prev = online.room, guestChanged = r.guest!==prev.guest;
   online.room = r;
   if(r.status==='closed'){
     if(phase==='final' || (phase==='results' && matchOver())) return;
@@ -1279,6 +1325,7 @@ function syncOnline(r){
   if(phase==='lobby'){
     if(r.status==='build') refreshNames().then(()=>{ if(online && phase==='lobby'){ newMatch(r.seed); babalaScreen(); } });
     else if(guestChanged) refreshNames().then(()=>{ if(online && phase==='lobby') renderLobby(); });
+    else if(r.ready0!==prev.ready0 || r.ready1!==prev.ready1) refreshNames().then(()=>{ if(online && phase==='lobby') updateLobby(); });
     return;
   }
   if(phase==='results' && r.status==='build' && r.round===G.round+1){ G.round=r.round; setupRound(); babalaScreen(); return; }
