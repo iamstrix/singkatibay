@@ -85,6 +85,7 @@ h3{margin:18px 0 8px;font-size:16px;font-weight:800}
 .t-solid{background:#A8D58A}
 .t-liq{background:repeating-linear-gradient(45deg,#F06A4A 0 5px,#FFE2C8 5px 10px)}
 .t-low{background:repeating-linear-gradient(-45deg,#3B82C4 0 5px,#CFE6F7 5px 10px)}
+.t-lahar{background:repeating-linear-gradient(-45deg,#7A6A5A 0 5px,#E2D6C6 5px 10px)}
 .lot button.fp{outline:3px solid var(--ink);outline-offset:-3px}
 .lot button.fp::after{content:"";position:absolute;inset:30%;border-radius:50%;background:var(--ink)}
 .lot button.pv{outline:3px dashed var(--ink);outline-offset:-3px}
@@ -224,11 +225,13 @@ const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').match
 
 /* ---------------- Game data ---------------- */
 const BUDGET = 40, BUILD_SECONDS = 60, EVAC_SLOTS = 4;
-const ROUNDS = ['baha','lindol','bagyo'];
+// Maps a match can draw from (3 per match). TEMPORARY: remove 'pagsabog' before submission.
+const MAP_POOL = ['baha','lindol','bagyo','pagsabog'];
 const HZ = {
   baha:{name:'Baha',en:'Flood',place:'Marikina riverside',agency:'PAGASA heavy rainfall warning',color:'#C0533F',call:'Baha!',note:'The Marikina River is rising. Striped blue tiles are low ground that floods first.'},
   lindol:{name:'Lindol',en:'Earthquake',place:'Marikina Valley, along the West Valley Fault',agency:'PHIVOLCS earthquake advisory',color:'#8C4B2F',call:'Lindol!',note:'Striped orange tiles are liquefaction-prone ground that can turn soft when the shaking starts.'},
-  bagyo:{name:'Bagyo',en:'Typhoon',place:'the coast of Baler, Aurora',agency:'PAGASA tropical cyclone wind signal',color:'#3A5BA8',call:'Bagyo!',note:'Storm surge is expected along the shore. Striped blue tiles near the sea flood first.'}
+  bagyo:{name:'Bagyo',en:'Typhoon',place:'the coast of Baler, Aurora',agency:'PAGASA tropical cyclone wind signal',color:'#3A5BA8',call:'Bagyo!',note:'Storm surge is expected along the shore. Striped blue tiles near the sea flood first.'},
+  pagsabog:{name:'Pagsabog',en:'Eruption',place:'the Taal Lake shore, Batangas',agency:'PHIVOLCS Taal Volcano bulletin',color:'#6B5B53',call:'Pagsabog!',note:'Ash will fall on every roof, and wet ash is heavy. Striped brown tiles are lahar channels, where volcanic mudflow runs when heavy ash mixes with rain.'}
 };
 const TEMPLATES = {
   kubo:{name:'Bahay kubo',cost:0,W:2,Cq:2,Cw:2,floodRes:.3,floorLevel:1,storeys:1,roof:'nipa',wall:'bamboo',
@@ -246,13 +249,18 @@ const RETRO = [
   {id:'stilts',name:'Raise on stilts',cost:10,not:['kubo'],desc:'Lifts every floor one level. Wobbly in earthquakes unless braced.'},
   {id:'nipa',name:'Light nipa roof',cost:5,not:['kubo'],desc:'Much lighter roof, but it catches more wind.'},
   {id:'stone',name:'Stone lower walls',cost:8,not:['bato'],desc:'Ground floor holds up in floods. Adds weight.'},
-  {id:'straps',name:'Roof straps',cost:6,desc:'Ties the roof down against wind. Bamboo can only be strapped so far.'}
+  {id:'straps',name:'Roof straps',cost:6,desc:'Ties the roof down against wind. Bamboo can only be strapped so far.'},
+  {id:'pitch',name:'Steeper roof',cost:6,not:['kubo'],desc:'Ash and rain slide off instead of piling up. Catches a bit more wind.'}
 ];
 const RESIDENTS = ['Lola Ising','Mang Ben','Bunso'];
 const ACTIONS = [['evac','Lumikas'],['dch','Duck, Cover, Hold'],['up','Akyat']];
 const STATUS = {ligtas:['Ligtas','safe',100],sugatan:['Sugatan','injured',40],natrap:['Na-trap','trapped, rescued later',20]};
+const TILE_NAME = {solid:'Solid', liq:'Liquefaction-prone', low:'Low ground', lahar:'Lahar channel'};
 const ROMAN = {6:'VI',7:'VII',8:'VIII',9:'IX'};
 const RAIN_NAME = {1:'Orange',2:'Red'};
+// eruption strength (3-5): how much ash falls, and how deep lahar runs in the channels
+const ASH_NAME = {3:'light ashfall',4:'heavy ashfall',5:'very heavy ashfall'};
+const ASH_LOAD = {3:.55,4:.9,5:1.25}, LAHAR = {3:0,4:1,5:2};
 
 /* ---------------- RNG and terrain ---------------- */
 function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
@@ -275,6 +283,12 @@ function makeTerrain(hz,rng){
     };
     if(hz==='baha'){ for(let c=0;c<5;c++) if(rng()<.6) T[c][4]='low'; blob('low',4,[3,4]); blob('liq',2); }
     else if(hz==='lindol'){ blob('liq',6); blob('liq',3); blob('low',2); }
+    else if(hz==='pagsabog'){
+      // lahar channels wind from the ridge (row 4) down toward the lake (row 0)
+      const n = rng()<.6 ? 2 : 1;
+      for(let k=0;k<n;k++){ let c = Math.floor(rng()*5);
+        for(let r=4;r>=0;r--){ T[c][r]='lahar'; if(rng()<.35){ c = Math.max(0,Math.min(4,c+(rng()<.5?-1:1))); T[c][r]='lahar'; } } }
+    }
     else { for(let c=0;c<5;c++) if(rng()<.55) T[c][4]='low'; blob('low',3,[3,4]); blob('liq',2); }
     let clean=0;
     for(let ax=0;ax<4;ax++)for(let ar=0;ar<4;ar++){
@@ -290,15 +304,19 @@ function fpTiles(a){return [[a.ax,a.ar],[a.ax+1,a.ar],[a.ax,a.ar+1],[a.ax+1,a.ar
 /* ---------------- State ---------------- */
 let G = null;
 function newMatch(seed){
-  G = {seed, round:0, wins:[0,0], totals:[0,0], history:[]};
+  // each match draws 3 maps from the pool in a seeded order, so online players get the same ones
+  const pick = mulberry32(seed*7+3), order = MAP_POOL.slice();
+  for(let i=order.length-1;i>0;i--){ const j = Math.floor(pick()*(i+1)); [order[i],order[j]] = [order[j],order[i]]; }
+  G = {seed, round:0, wins:[0,0], totals:[0,0], history:[], order:order.slice(0,3)};
   setupRound();
 }
 function setupRound(){
-  const hz = G.forceHz || ROUNDS[G.round];   // forceHz: set by the dev panel
+  const hz = G.forceHz || G.order[G.round];   // forceHz: set by the dev panel
   const rng = mulberry32(G.seed*31 + G.round*977 + 7);
   const T1 = makeTerrain(hz,rng);
   let band, actual;
   if(hz==='lindol'){ const lo = rng()<.5?7:8; band=[lo,lo+1]; actual = lo+(rng()<.5?0:1); }
+  else if(hz==='pagsabog'){ const lo = rng()<.5?3:4; band=[lo,lo+1]; actual = lo+(rng()<.5?0:1); }
   else if(hz==='baha'){ band=[1,2]; actual = rng()<.5?1:2; }
   else { const lo = rng()<.5?3:4; band=[lo,lo+1]; actual = lo+(rng()<.5?0:1); }
   G.hz = hz; G.band = band; G.actual = actual;
@@ -318,6 +336,9 @@ function stats(p){
   if(has('nipa')){ s.W-=2; s.Cw-=1; s.roof='nipa'; }
   if(has('stone')){ s.floodRes=Math.max(s.floodRes,.9); s.W+=2; s.wall='stone'; }
   if(has('straps')) s.Cw+=3;
+  if(has('pitch')) s.Cw-=1;
+  // how much wet ash the roof can carry before it caves in
+  s.ashCap = {nipa:.75,gi:.8,tile:1.15}[s.roof] + (has('brace')?.2:0) + (has('posts')?.25:0) + (has('pitch')?.35:0) + (has('columns')?.15:0);
   if(p.type==='kubo') s.Cw=Math.min(s.Cw,4);
   if(has('mat')) s.mat=true;
   s.Cq=Math.max(1,s.Cq); s.W=Math.max(1,s.W); s.Cw=Math.max(1,s.Cw);
@@ -400,6 +421,34 @@ function evaluate(){
       });
       if(evacFull[pi].some(Boolean)) why.push('The evacuation center was already full. Whoever locks in first gets the spaces, so evacuate early.');
       if(p.actions.some((a,i)=>a!=='evac'&&status[i]==='natrap')) why.push('People stayed on a floor the water reached. Evacuating early, or a higher floor, keeps them out of the water.');
+    }
+    else if(hz==='pagsabog'){
+      const onLahar = tiles.includes('lahar');
+      // ash load on the roof
+      const ra = ASH_LOAD[A]/s.ashCap;
+      if(ra<=.7) integ=100; else if(ra<=1) integ=100-(ra-.7)/.3*30; else integ = 45-Math.min(25,(ra-1)*50);
+      anim.roofCollapse = ra>1;
+      // lahar in the channel, if the house was built in one
+      const hl = onLahar ? LAHAR[A] : 0; anim.lahar = LAHAR[A];
+      const sub = Math.max(0,Math.min(hl - s.floorLevel, s.storeys));
+      integ -= sub*(1-s.floodRes)*45;
+      if(hl > s.floorLevel + s.storeys) integ -= 20;
+      if(anim.roofCollapse) why.push('Wet ash is heavy, and it piled up until the roof caved in. A steeper roof sheds ash; extra posts and bracing carry more weight.');
+      else why.push('The roof carried the weight of the ash.');
+      if(onLahar){
+        viol.push('Built in a lahar channel');
+        why.push(hl>0 ? 'Lahar, a flow of volcanic mud and debris, poured down the channel the house was built in.'
+                      : 'The house sits in a lahar channel. No lahar came this time, but channels are no-build zones.');
+      }
+      p.actions.forEach((a,i)=>{
+        // with no space at the center, evacuees are caught outside in the ashfall
+        if(a==='evac'){ status.push(evacOK[pi][i] ? 'ligtas' : 'sugatan'); return; }
+        if(a==='dch') status.push(hl > s.floorLevel || (anim.roofCollapse && s.storeys===1) ? 'natrap' : 'ligtas');
+        else status.push(anim.roofCollapse || hl > top ? 'natrap' : 'ligtas');
+      });
+      if(evacFull[pi].some(Boolean)) why.push('The evacuation center was already full, so some residents were caught outside in the ashfall. Whoever locks in first gets the spaces.');
+      if(anim.roofCollapse && p.actions.includes('up')) why.push('The top floor is right under the roof, the worst place to be when it caves in.');
+      else if(!anim.roofCollapse && p.actions.includes('dch') && hl<=s.floorLevel) why.push('Staying indoors with the windows shut kept the ash out of everyone’s lungs.');
     }
     else {
       const kw = {3:3.5,4:5,5:6.5}[A];
@@ -504,7 +553,8 @@ function stripeTex(a,b){
 const TILE_MAT = {
   solid: tmat('#96CC7A'),
   liq: new THREE.MeshToonMaterial({color:'#FFFFFF',map:stripeTex('#F06A4A','#FFE2C8'),gradientMap:gradMap}),
-  low: new THREE.MeshToonMaterial({color:'#FFFFFF',map:stripeTex('#3B82C4','#CFE6F7'),gradientMap:gradMap})
+  low: new THREE.MeshToonMaterial({color:'#FFFFFF',map:stripeTex('#3B82C4','#CFE6F7'),gradientMap:gradMap}),
+  lahar: new THREE.MeshToonMaterial({color:'#FFFFFF',map:stripeTex('#7A6A5A','#E2D6C6'),gradientMap:gradMap})
 };
 const lotX = (pi,c)=> pi===0 ? -4.6+c : 0.6+c;
 const lotZ = r=> -2+r;
@@ -554,6 +604,12 @@ const LOC = {
       {cap:'Sabang Beach', p:[[-26,1.3,22],[-19,1.5,15]], l:[[-16,1.2,5],[-14,1.2,4]]},
       {cap:'Surf’s up', p:[[-8,1.2,9.4],[0,1.2,9.6]], l:[[-5,.9,6.7],[3,.9,6.7]]},
       {cap:'Beach pavilion', p:[[-13,1.8,8.5],[-15,3,10]], l:[[-20,1.6,4.4],[-20,2,4.4]]},
+      {p:[[0,24,27],[0,12.5,16.5]], l:[[0,0,-1],[0,-.4,-1.1]], d:1.8}]},
+  pagsabog:{name:'Taal Lake shore',sub:'Batangas, facing Taal Volcano',kind:'volcano',water:'#5E8FA8',waterY:-.3,
+    shots:[
+      {cap:'Taal Volcano', p:[[-24,3,-16],[-14,3.4,-20]], l:[[2,4,-42],[2,4.5,-42]]},
+      {cap:'Main Crater', p:[[-6,11,-33],[8,12,-32]], l:[[2,4,-42],[2,4,-42]]},
+      {cap:'Fish cages on Taal Lake', p:[[22,2,-10],[14,2.4,-11]], l:[[14,0,-18],[8,0,-17]]},
       {p:[[0,24,27],[0,12.5,16.5]], l:[[0,0,-1],[0,-.4,-1.1]], d:1.8}]}
 };
 const nz = (x,z)=> Math.sin(x*.13+1.7)*Math.cos(z*.11-.4)*.5 + Math.sin(x*.051+z*.07+2)*.5;
@@ -567,6 +623,8 @@ function flatBlend(x,z){
 const riverZ = x=> 7 + 1.6*Math.sin(x*.07+.5);
 const coastZ = x=> 9.5 + 1.5*Math.sin(x*.08);
 const faultS = (x,z)=> z - (-16 + .12*x);
+const VOLC = {x:2, z:-42};                                   // Taal Volcano island, out in the lake
+const lakeD = (x,z)=> -z - 12 + 2*Math.sin(x*.09);           // > 0 inside Taal Lake
 function rawHeight(kind,x,z){
   let h = FLAT;
   if(kind==='beach'){
@@ -580,6 +638,14 @@ function rawHeight(kind,x,z){
     if(d<2.3) h = -1; else if(d<3.8) h = -1 + (d-2.3)/1.5*(FLAT+1); else h = FLAT + nz(x,z)*.1;
     h += sstep(10,36,-z)*(4+2*nz(x,z));
     if(z>riverZ(x)+3.8) h += sstep(0,24,z-riverZ(x)-3.8)*1.4;
+  } else if(kind==='volcano'){
+    // lakeshore town: the lake to the north with the volcano island, the caldera ridge rising behind
+    const ld = lakeD(x,z), vd = Math.hypot(x-VOLC.x, z-VOLC.z);
+    h = ld>0 ? FLAT - Math.min(3, ld*.45) : FLAT + nz(x,z)*.1;
+    h += Math.max(0, 8.5 - vd*.6);                 // the cone
+    if(vd<3) h -= (3-vd)*1.2;                      // its crater
+    h += sstep(10,40,z)*(9+3*nz(x,z));             // caldera ridge (Tagaytay side)
+    h += sstep(30,55,Math.abs(x))*(6+2*nz(x,z));
   } else {
     h = FLAT + nz(x,z)*.08;
     h += sstep(12,30,x)*(7+3*nz(x,z));
@@ -593,7 +659,7 @@ function heightAt(kind,x,z){ const b = flatBlend(x,z); return FLAT*(1-b) + rawHe
 // Ground color per vertex. Every boundary blends over a short distance (wider than one
 // terrain cell), so edges read as soft curves instead of a staircase of triangles.
 const LAND = {};
-['#DCCFB0','#BFAE8C','#B8B2A8','#8E8A84','#5E9E5C','#86C46E','#6E5A45','#A68E6A','#8CC66F','#9BD06E','#84C060','#6FAE62','#4F8550']
+['#DCCFB0','#BFAE8C','#B8B2A8','#8C8478','#8A7F73','#B5C27A','#8E8A84','#5E9E5C','#86C46E','#6E5A45','#A68E6A','#8CC66F','#9BD06E','#84C060','#6FAE62','#4F8550']
   .forEach(c=>{ LAND[c] = new THREE.Color(c); });
 function colorAt(kind,x,z,h,out){
   const lay = (c,t)=>{ if(t>0) out.lerp(LAND[c],Math.min(1,t)); };
@@ -613,6 +679,15 @@ function colorAt(kind,x,z,h,out){
     // the play side has Marikina's concrete embankment, the far side a natural bank
     lay(z<riverZ(x) ? '#B8B2A8' : '#A68E6A', 1-sstep(3.4,4.4,d));
     lay('#6E5A45', 1-sstep(1.9,2.7,d));
+    return out;
+  }
+  if(kind==='volcano'){
+    const vd = Math.hypot(x-VOLC.x, z-VOLC.z);
+    out.copy(LAND['#86C46E']);
+    lay('#5E9E5C', sstep(2,3.5,h)*sstep(14,18,vd));   // forested ridge
+    lay('#8C8478', 1-sstep(-.1,.35,h));                // dark volcanic sand at the shore
+    lay('#8A7F73', 1-sstep(9,15,vd));                  // bare volcano slopes
+    lay('#B5C27A', 1-sstep(2.4,3.2,vd));               // the crater
     return out;
   }
   // valley: soft field patches from noise instead of a hard checkerboard
@@ -679,9 +754,31 @@ function palm(g,x,z,rng){
   }
 }
 let foam = null;   // Baler's surf line, nudged back and forth in tick()
+let alertSign = null;   // Taal's alert-level board, updated when the eruption starts
+function bancaAt(L,x,y,z,rot){
+  const b = new THREE.Group(); b.position.set(x,y,z); b.rotation.y = rot; L.add(b);
+  box(b,'#F4F1E8',2.2,.3,.45,0,0,0); box(b,'#E63946',2.2,.08,.47,0,.12,0,{outline:false});
+  [-.75,.75].forEach(dz=>box(b,'#8A6B4A',2,.07,.07,0,-.05,dz,{outline:false}));
+  [-.6,.6].forEach(dx=>box(b,'#8A6B4A',.06,.06,1.5,dx,.05,0,{outline:false}));
+}
 function buildLandmarks(kind){
   const L = landscape, H = (x,z)=>heightAt(kind,x,z);
-  foam = null;
+  foam = null; alertSign = null;
+  if(kind==='volcano'){
+    // PHIVOLCS-style alert board near the lots, showing the warning level until the eruption
+    const sg = new THREE.Group(); sg.position.set(9,H(9,-6.5),-6.5); sg.rotation.y = -.35; L.add(sg);
+    [-.7,.7].forEach(x=>box(sg,'#3D3A40',.1,1.7,.1,x,.85,0,{outline:false}));
+    box(sg,'#F2D04B',1.8,1.3,.06,0,1.75,0);
+    const face = new THREE.Mesh(new THREE.PlaneGeometry(1.7,1.2), new THREE.MeshBasicMaterial({map:signTex([['TAAL VOLCANO',30],['ALERT LEVEL',30],[String(G.band[0]),56]],'#F2D04B','#2A2233')}));
+    face.position.set(0,1.75,.035); sg.add(face); alertSign = face.material;
+    // fish cages and bancas out on the lake
+    for(let i=0;i<6;i++){
+      const cx = 11+(i%3)*3, cz = -15.5-Math.floor(i/3)*3, y = currentLoc.waterY+.08;
+      [[0,-.8,1.7,.12],[0,.8,1.7,.12],[-.8,0,.12,1.7],[.8,0,.12,1.7]].forEach(([dx,dz,sx,sz])=>box(L,'#8A6B4A',sx,.1,sz,cx+dx,y,cz+dz,{outline:false}));
+      box(L,'#3E4A44',1.5,.02,1.5,cx,y-.06,cz,{outline:false,shadow:false});
+    }
+    bancaAt(L,-6,currentLoc.waterY+.15,-17,.4); bancaAt(L,24,currentLoc.waterY+.15,-13,-.3);
+  }
   if(kind==='river'){
     // riverside promenade along the play-side embankment, lamp posts beside it
     L.add(groundStrip(kind, line(-80,80,2,x=>riverZ(x)-4.5), .55, '#C9C2B6', .04));
@@ -751,6 +848,7 @@ function buildLandscape(hz){
   if(landscape){ scene.remove(landscape); disposeGroup(landscape); }
   currentLoc = LOC[hz];
   const kind = currentLoc.kind;
+  landMat.color.set(0xffffff); TILE_MAT.solid.color.set('#96CC7A');   // undo any ash tint
   landscape = new THREE.Group(); scene.add(landscape);
   // Low-poly ground: jitter the grid so triangles look hand-cut, then give each flat-shaded
   // face the smoothly blended color at its center plus a small brightness shift.
@@ -777,7 +875,7 @@ function buildLandscape(hz){
   const land = new THREE.Mesh(geo,landMat); land.receiveShadow = true; landscape.add(land);
   const rng = mulberry32(kind==='beach'?11:kind==='river'?22:33);
   // landmarks from the reference photos; random scenery keeps clear of them
-  const SPOTS = {river:[[14,-12,4.5],[5.5,riverZ(5.5)-2.6,1.5]], valley:[[-22,-3,7],[-6,-15,2.5],[-2,-20,2.5]], beach:[[-20,coastZ(-20)-3.6,3.5],[-1,coastZ(-1)-2.6,6.5]]}[kind];
+  const SPOTS = {river:[[14,-12,4.5],[5.5,riverZ(5.5)-2.6,1.5]], valley:[[-22,-3,7],[-6,-15,2.5],[-2,-20,2.5]], beach:[[-20,coastZ(-20)-3.6,3.5],[-1,coastZ(-1)-2.6,6.5]], volcano:[[9,-6.5,2.2],[15,-17,6]]}[kind];
   const clearOfPlay = (x,z)=> !(Math.abs(x)<7.4 && z>-7.4 && z<4.2) && Math.hypot(x*.8,z-17) > 12 && SPOTS.every(([sx,sz,r])=>Math.hypot(x-sx,z-sz)>r)
     && !(kind==='valley' && z<-6 && Math.abs(x+1)<2.8);   // keep the road clear
   buildLandmarks(kind);
@@ -786,13 +884,22 @@ function buildLandscape(hz){
     while(n<34 && guard<400){ guard++;
       const x=(rng()-.5)*70, z = rng()<.6 ? 3.6+rng()*(coastZ(0)-5) : -7-rng()*10;
       if(!clearOfPlay(x,z) || heightAt(kind,x,z)<.2) continue; palm(landscape,x,z,rng); n++; }
-    [[-14,0],[-9,.6],[16,-.4]].forEach(([x,rot])=>{
-      const z = coastZ(x)-1.4, y = heightAt(kind,x,z);
-      const b = new THREE.Group(); b.position.set(x,y+.15,z); b.rotation.y = rot; landscape.add(b);
-      box(b,'#F4F1E8',2.2,.3,.45,0,0,0); box(b,'#E63946',2.2,.08,.47,0,.12,0,{outline:false});
-      [-.75,.75].forEach(dz=>box(b,'#8A6B4A',2,.07,.07,0,-.05,dz,{outline:false}));
-      [-.6,.6].forEach(dx=>box(b,'#8A6B4A',.06,.06,1.5,dx,.05,0,{outline:false}));
-    });
+    [[-14,0],[-9,.6],[16,-.4]].forEach(([x,rot])=>{ const z = coastZ(x)-1.4; bancaAt(landscape,x,heightAt(kind,x,z)+.15,z,rot); });
+  } else if(kind==='volcano'){
+    // lakeshore houses and ridge trees, kept off the lake
+    const N=36, walls=new THREE.InstancedMesh(unitBox,tmat('#FFFFFF'),N), roofs=new THREE.InstancedMesh(new THREE.ConeGeometry(.95,.7,4,1),tmat('#FFFFFF'),N);
+    const m4=new THREE.Matrix4(), q=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,Math.PI/4,0)), c=new THREE.Color();
+    let n=0, guard=0;
+    while(n<N && guard<800){ guard++;
+      const x=(rng()-.5)*70, z = rng()<.6 ? -6.5-rng()*5 : 6+rng()*14;
+      if(!clearOfPlay(x,z) || lakeD(x,z)>-1.2) continue;
+      const y=heightAt(kind,x,z); if(y>3) continue;
+      m4.compose(new THREE.Vector3(x,y+.4,z),new THREE.Quaternion(),new THREE.Vector3(1.2,.8,1.2)); walls.setMatrixAt(n,m4); walls.setColorAt(n,c.set(['#F2E6D0','#E8D2B0','#D9DDE2'][n%3]));
+      m4.compose(new THREE.Vector3(x,y+1.15,z),q,new THREE.Vector3(1,1,1)); roofs.setMatrixAt(n,m4); roofs.setColorAt(n,c.set(['#8FA3B5','#C0533F','#8FA3B5'][n%3]));
+      n++;
+    }
+    walls.count=roofs.count=n; [walls,roofs].forEach(o=>{o.castShadow=true; landscape.add(o);});
+    for(let i=0;i<26;i++){ const x=(rng()-.5)*80, z=8+rng()*24; if(!clearOfPlay(x,z)) continue; const t=new THREE.Mesh(new THREE.SphereGeometry(.7+rng()*.5,7,6),tmat('#4E9A52')); t.position.set(x,heightAt(kind,x,z)+.8,z); t.castShadow=true; landscape.add(t); }
   } else if(kind==='river'){
     const N = 70, inst = new THREE.InstancedMesh(unitBox,tmat('#FFFFFF'),N), m4=new THREE.Matrix4(), c=new THREE.Color();
     const cpal = ['#E8E2D6','#D8CFC0','#C9D3DB','#F2D9B8','#BFC6CC','#E9C9B9'];
@@ -837,7 +944,9 @@ const lowWater = [null,null];
 function buildLowWater(pi){
   if(lowWater[pi]){ world.remove(lowWater[pi]); lowWater[pi].geometry.dispose(); lowWater[pi]=null; }
   const T = G.terrain[pi], P = [], V = THREE.Vector3;
-  const isLow = (c,r)=> c>=0&&c<5&&r>=0&&r<5&&T[c][r]==='low';
+  // the tiles that fill up: low ground floods, lahar channels carry mudflow in an eruption
+  const fill = G.hz==='pagsabog' ? 'lahar' : 'low';
+  const isLow = (c,r)=> c>=0&&c<5&&r>=0&&r<5&&T[c][r]===fill;
   const quad = (a,b,c,d,n)=>{
     const ab=new V().subVectors(b,a), ac=new V().subVectors(c,a);
     const pts = new V().crossVectors(ab,ac).dot(n)<0 ? [a,c,b,a,d,c] : [a,b,c,a,c,d];
@@ -856,7 +965,7 @@ function buildLowWater(pi){
   const geo = new THREE.BufferGeometry();
   geo.setAttribute('position',new THREE.Float32BufferAttribute(P,3));
   geo.computeVertexNormals();
-  const m = new THREE.Mesh(geo,waterMat);
+  const m = new THREE.Mesh(geo, fill==='lahar' ? laharMat : waterMat);
   m.position.y=.5; m.scale.y=.01; m.visible=false; m.renderOrder=3;
   world.add(m); lowWater[pi]=m;
 }
@@ -870,6 +979,13 @@ const RAIN_N = 420, rainPos = new Float32Array(RAIN_N*6);
 for(let i=0;i<RAIN_N;i++){ const x=(Math.random()-.5)*16, y=Math.random()*9, z=(Math.random()-.5)*12;
   rainPos.set([x,y,z,x-.15,y-.5,z],i*6); }
 rainGeo.setAttribute('position',new THREE.BufferAttribute(rainPos,3));
+const laharMat = new THREE.MeshToonMaterial({color:'#7D6E5E',gradientMap:gradMap,transparent:true,opacity:.92,depthWrite:false});
+// falling ash for the eruption: slow grey flakes that drift
+const ASH_N = 600, ashPos = new Float32Array(ASH_N*3);
+for(let i=0;i<ASH_N;i++) ashPos.set([(Math.random()-.5)*18, Math.random()*9, (Math.random()-.5)*14], i*3);
+const ashGeo = new THREE.BufferGeometry(); ashGeo.setAttribute('position',new THREE.BufferAttribute(ashPos,3));
+const ashFall = new THREE.Points(ashGeo,new THREE.PointsMaterial({color:'#B8AFA4',size:.09,transparent:true,opacity:.85}));
+ashFall.visible = false; scene.add(ashFall);
 const rain = new THREE.LineSegments(rainGeo,new THREE.LineBasicMaterial({color:'#D6E6F5',transparent:true,opacity:.6}));
 rain.visible=false; scene.add(rain);
 
@@ -935,7 +1051,8 @@ function makeHouse(pi,p,a){
   }
   const topY = base + (fl+s.storeys)*H;
   if(has('posts')) [[-.97,-.97],[.97,-.97],[-.97,.97],[.97,.97]].forEach(([x,z])=>box(lower,'#5A3E2B',.13,topY-base,.13,x,base+(topY-base)/2,z));
-  const roofSpec = {nipa:['#C9A35C',1.1],tile:['#C0533F',.8],gi:['#8FA3B5',.55]}[s.roof];
+  const roofSpec = {nipa:['#C9A35C',1.1],tile:['#C0533F',.8],gi:['#8FA3B5',.55]}[s.roof].slice();
+  if(has('pitch')) roofSpec[1] *= 1.6;
   const rad = type==='bato' ? 1.6 : 1.45;
   const cone = new THREE.ConeGeometry(rad,roofSpec[1],4,1);
   const rm = new THREE.Mesh(cone,tmat(roofSpec[0])); rm.rotation.y=Math.PI/4; rm.position.y=topY+roofSpec[1]/2; rm.castShadow=true; roof.add(rm);
@@ -1037,7 +1154,7 @@ function paintTerrain(){
 
 /* ----- Sky phases ----- */
 const sky = document.getElementById('sky');
-const SKIES = {build:['#B9A3E3','#FBD3B0','#F6C3B0',.5,.9,'#FFC79A'], storm:['#2E3646','#6B7686','#5B6676',.35,.35,'#B8C4D6'], after:['#E7A9A0','#FCE2C2','#F6CDB4',.55,.8,'#FFC28A']};
+const SKIES = {build:['#B9A3E3','#FBD3B0','#F6C3B0',.5,.9,'#FFC79A'], storm:['#2E3646','#6B7686','#5B6676',.35,.35,'#B8C4D6'], after:['#E7A9A0','#FCE2C2','#F6CDB4',.55,.8,'#FFC28A'], ash:['#3E3834','#8C8070','#7A7066',.38,.45,'#D9B48A']};
 function setSky(k){ const s=SKIES[k]; sky.style.background='linear-gradient(to bottom,'+s[0]+','+s[1]+')'; scene.fog.color.set(s[2]); hemi.intensity=s[3]; sun.intensity=s[4]; sun.color.set(s[5]); }
 
 /* ---------------- UI ---------------- */
@@ -1051,11 +1168,13 @@ function hideOverlay(){ overlay.classList.remove('on'); }
 function hazardLine(){
   if(G.hz==='lindol') return 'Intensity '+ROMAN[G.band[0]]+' to '+ROMAN[G.band[1]]+' shaking expected';
   if(G.hz==='baha') return RAIN_NAME[1]+' to '+RAIN_NAME[2]+' rainfall warning';
+  if(G.hz==='pagsabog'){ const a = ASH_NAME[G.band[0]]; return 'Alert Level '+G.band[0]+': '+a[0].toUpperCase()+a.slice(1)+' to '+ASH_NAME[G.band[1]]+' expected'; }
   return 'Signal No. '+G.band[0]+' to '+G.band[1];
 }
 function actualLine(){
   if(G.hz==='lindol') return 'Intensity '+ROMAN[G.actual];
   if(G.hz==='baha') return RAIN_NAME[G.actual]+' rainfall';
+  if(G.hz==='pagsabog'){ const a = ASH_NAME[G.actual]; return a[0].toUpperCase()+a.slice(1)+(LAHAR[G.actual] ? ' and lahar' : ''); }
   return 'Signal No. '+G.actual;
 }
 function setHud(){ const h=HZ[G.hz]; hudInfo.textContent = 'Round '+(G.round+1)+' of 3: '+h.name+' ('+h.en.toLowerCase()+')'; }
@@ -1138,19 +1257,22 @@ function renderBuild(){
     const lq = Math.max(0,Math.min(5,s.Cq/s.W*2.2));
     const bh = Math.max(0,Math.min(5,s.floorLevel*1.5+s.storeys*.75+s.floodRes*2));
     const bg = Math.max(0,Math.min(5,s.Cw/1.4));
-    h += '<div class="stats"><span>Lindol</span>'+bars(lq)+'<span>Baha</span>'+bars(bh)+'<span>Bagyo</span>'+bars(bg)+'</div>';
+    h += '<div class="stats"><span>Lindol</span>'+bars(lq)+'<span>Baha</span>'+bars(bh)+'<span>Bagyo</span>'+bars(bg)+
+      (G.hz==='pagsabog' ? '<span>Pagsabog</span>'+bars(Math.max(0,Math.min(5,s.ashCap/1.3*5))) : '')+'</div>';
   }
   h += '<h3>Where to build</h3><div class="gridwrap">';
   const lotHtml = (()=>{ let g='<div class="lot" role="group" aria-label="Your lot, 5 by 5 tiles">';
     const fp = p.anchor ? fpTiles(p.anchor).map(t=>t.join(',')) : [];
     for(let r=0;r<5;r++) for(let c=0;c<5;c++){
-      const t = T[c][r]; const lab = t==='liq'?'liquefaction-prone':t==='low'?'low ground':'solid ground';
+      const t = T[c][r]; const lab = TILE_NAME[t].toLowerCase();
       g+='<button class="t-'+t+(fp.includes(c+','+r)?' fp':'')+'" data-act="tile" data-c="'+c+'" data-r="'+r+'" aria-label="Column '+(c+1)+', row '+(r+1)+', '+lab+'"></button>';
     }
     return g+'</div>'; })();
   const borderHtml = '<div class="border">Shared border</div>';
   h += pi===0 ? lotHtml+borderHtml : borderHtml+lotHtml;
-  h += '</div><div class="legend"><span><i class="t-solid"></i>Solid</span><span><i class="t-liq"></i>Liquefaction-prone</span><span><i class="t-low"></i>Low ground</span></div>';
+  // legend lists only the tile types this lot actually has
+  const kinds = ['solid','liq','low','lahar'].filter(k=>T.some(col=>col.includes(k)));
+  h += '</div><div class="legend">'+kinds.map(k=>'<span><i class="t-'+k+'"></i>'+TILE_NAME[k]+'</span>').join('')+'</div>';
   h += '<p class="hint">Tap a tile here or on your island to place your 2×2 house. With a mouse, hover first to preview it.</p>';
   h += '<h3>Retrofits</h3><div class="retros">';
   RETRO.forEach(r=>{
@@ -1237,7 +1359,8 @@ function runDisaster(){
   phase='disaster'; hideOverlay(); panel.classList.remove('on'); updateView();
   G.result = evaluate();
   [0,1].forEach(pi=>{ buildHouse(pi); if(houses[pi]) houses[pi].g.visible=true; });
-  setSky('storm');
+  setSky(G.hz==='pagsabog' ? 'ash' : 'storm');
+  if(G.hz==='pagsabog') startEruption();
   const slots = []; let si=0;
   G.result.forEach(res=>res.evacOK.forEach((ok,i)=>{ if(ok) slots.push({pi:res.pi,i,slot:si++}); }));
   [0,1].forEach(pi=>people[pi].forEach((m,i)=>{ if(!slots.find(s=>s.pi===pi&&s.i===i)) m.visible=false; }));
@@ -1245,10 +1368,35 @@ function runDisaster(){
   document.getElementById('calloutBig').textContent = HZ[G.hz].call;
   document.getElementById('calloutSub').textContent = actualLine();
   callout.classList.add('on');
-  rain.visible = G.hz!=='lindol';
+  rain.visible = G.hz==='baha' || G.hz==='bagyo';
+  ashFall.visible = G.hz==='pagsabog';
   resetWater();
   if(G.hz!=='lindol') lowWater.forEach(m=>{ if(m) m.visible=true; });
-  anim = {t0:performance.now(), dur:6000, slots};
+  anim = {t0:performance.now(), dur:6000, slots, plume: G.hz==='pagsabog' ? makePlume() : null};
+}
+// Eruption setup: each roof gets its own material so ash can grey it, plus an ash layer that thickens;
+// the alert board switches to the actual level.
+const ASH_COL = new THREE.Color('#A39A8F');
+function startEruption(){
+  houses.forEach(H=>{
+    if(!H) return;
+    const rm = H.roof.children[0];
+    H.roofMat = rm.material = rm.material.clone(); H.roofCol0 = H.roofMat.color.clone();
+    const cap = new THREE.Mesh(rm.geometry, tmat('#A39A8F'));
+    cap.rotation.copy(rm.rotation); cap.position.copy(rm.position); cap.visible = false; cap.castShadow = true;
+    H.roof.add(cap); H.ash = cap;
+  });
+  if(alertSign) alertSign.map = signTex([['TAAL VOLCANO',30],['ALERT LEVEL',30],[String(G.actual),56]],'#F2D04B','#2A2233');
+}
+function makePlume(){
+  const g = new THREE.Group();
+  g.position.set(VOLC.x, heightAt('volcano',VOLC.x,VOLC.z)+.8, VOLC.z);
+  for(let i=0;i<16;i++){
+    const m = new THREE.Mesh(new THREE.IcosahedronGeometry(1,0), tmat(i%3 ? '#8C8279' : '#6E655E'));
+    m.userData.ph = i/16; m.scale.setScalar(.01); g.add(m);
+  }
+  landscape.add(g);
+  return g;
 }
 function ease(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
 function stepAnim(now){
@@ -1260,10 +1408,24 @@ function stepAnim(now){
     const amp = reduceMotion ? 0 : (t>.5&&t<4.5 ? .16*{6:.6,7:.8,8:1,9:1.25}[G.actual]*(1-(t-.5)/4) : 0);
     world.position.set((Math.random()-.5)*amp,(Math.random()-.5)*amp*.3,(Math.random()-.5)*amp);
   } else world.position.set(0,0,0);
-  if(hz!=='lindol'){
+  if(rain.visible){
     const arr = rainGeo.attributes.position.array;
     for(let i=0;i<RAIN_N;i++){ let y=arr[i*6+1]-.32; if(y<-.5) y+=9; arr[i*6+1]=y; arr[i*6+4]=y-.5; arr[i*6]=arr[i*6+3]+.15; }
     rainGeo.attributes.position.needsUpdate=true;
+  }
+  if(hz==='pagsabog'){
+    // ash drifts down, the plume billows up from the crater, the ground greys over
+    const arr = ashGeo.attributes.position.array;
+    for(let i=0;i<ASH_N;i++){ let y=arr[i*3+1]-.05; if(y<.4) y+=9; arr[i*3+1]=y; arr[i*3]+=Math.sin(t*1.3+i)*.006; }
+    ashGeo.attributes.position.needsUpdate=true;
+    const grow = Math.min(1,t/1.2);
+    anim.plume.children.forEach(m=>{
+      const ph = m.userData.ph, p = (t*.22+ph)%1;
+      m.position.set(Math.sin(ph*20)*p*3, p*16*grow, Math.cos(ph*13)*p*2);
+      m.scale.setScalar((.6+p*3.2)*grow+.01);
+    });
+    const kg = Math.min(1,Math.max(0,(t-.8)/3));
+    landMat.color.setRGB(1,1,1).lerp(ASH_COL,.45*kg); TILE_MAT.solid.color.set('#96CC7A').lerp(ASH_COL,.45*kg);
   }
   G.result.forEach(res=>{
     const H = houses[res.pi]; if(!H) return;
@@ -1274,6 +1436,12 @@ function stepAnim(now){
       H.g.rotation.z = dir*((a.sink? .14 : 0) + a.tilt)*k;
       if(a.full){ H.g.scale.y = 1 - .62*k; H.roof.rotation.z = dir*.5*k; }
       if(a.upper){ H.upper.position.set(dir*1.1*k,-.9*k,0); H.upper.rotation.z = dir*1.1*k; H.roof.position.set(dir*1.6*k,-1.3*k,0); H.roof.rotation.z = dir*1.4*k; }
+    } else if(hz==='pagsabog'){
+      const ka = ease(Math.min(1,Math.max(0,(t-.8)/2.6)));   // ash piling on the roof
+      if(H.ash){ H.roofMat.color.copy(H.roofCol0).lerp(ASH_COL,ka); H.ash.visible = ka>.05; H.ash.scale.setScalar(1+.08*ka*ASH_LOAD[G.actual]); }
+      const kl = ease(Math.min(1,Math.max(0,(t-1.6)/2.4)));   // lahar running down the channels
+      if(lowWater[res.pi]) lowWater[res.pi].scale.y = Math.max(.01, a.lahar*.9*kl);
+      if(a.roofCollapse){ const kr = ease(Math.min(1,Math.max(0,(t-3.4)/.9))); H.roof.position.y = -.55*kr; H.roof.rotation.z = dir*.22*kr; }
     } else {
       const kw = ease(Math.min(1,Math.max(0,(t-1)/2.4)));
       if(hz==='baha'){
@@ -1291,7 +1459,7 @@ function stepAnim(now){
       }
     }
   });
-  if(t>=D){ anim=null; world.position.set(0,0,0); rain.visible=false; setSky('after'); showResults(); }
+  if(t>=D){ anim=null; world.position.set(0,0,0); rain.visible=false; ashFall.visible=false; setSky('after'); showResults(); }
 }
 
 function showResults(){
@@ -1367,7 +1535,7 @@ function netCall(fn,args){ SingkaNet.rpc(fn,args).then(syncOnline).catch(netErro
 // stops anything still counting down so it can't act on a room that is gone
 function haltPlay(){
   phase='halted'; clearInterval(timerId); clearInterval(countdownId); timerEl.style.display='none'; clearGhost(); updateOppChip();
-  panel.classList.remove('on'); anim=null; world.position.set(0,0,0);
+  panel.classList.remove('on'); anim=null; world.position.set(0,0,0); rain.visible=false; ashFall.visible=false;
   if(fly){ fly=null; intro.classList.remove('on'); document.body.classList.remove('cine'); shotCap.classList.remove('on'); controls.enabled=true; setGameCam(); }
 }
 
@@ -1667,10 +1835,11 @@ newMatch(12345); buildLandscape('baha'); paintTerrain(); setGameCam();
 updateView(); titleScreen(); requestAnimationFrame(tick);
 
 /* ---------------- DEV TOOLS (temporary, remove before release) ----------------
-   Open the game with ?dev to get a panel that loads any map at any intensity and jumps
-   to its intro, its build phase, or straight to the disaster. Pass-and-play only. */
-if(new URLSearchParams(location.search).has('dev')){
-  const BANDS = {baha:[1,2], lindol:[6,7,8,9], bagyo:[3,4,5]};   // new hazards add their levels here
+   A panel that loads any map at any intensity and jumps to its intro, its build phase,
+   or straight to the disaster. Pass-and-play only. Set DEV_TOOLS to false to hide it. */
+const DEV_TOOLS = true;
+if(DEV_TOOLS){
+  const BANDS = {baha:[1,2], lindol:[6,7,8,9], bagyo:[3,4,5], pagsabog:[3,4,5]};   // new hazards add their levels here
   const dev = document.createElement('div');
   dev.id = 'devPanel';
   dev.innerHTML = '<b>DEV</b><select id="devMap"></select><select id="devLvl"></select>'+
