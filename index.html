@@ -294,7 +294,7 @@ function newMatch(seed){
   setupRound();
 }
 function setupRound(){
-  const hz = ROUNDS[G.round];
+  const hz = G.forceHz || ROUNDS[G.round];   // forceHz: set by the dev panel
   const rng = mulberry32(G.seed*31 + G.round*977 + 7);
   const T1 = makeTerrain(hz,rng);
   let band, actual;
@@ -1665,6 +1665,49 @@ function tick(now){
 }
 newMatch(12345); buildLandscape('baha'); paintTerrain(); setGameCam();
 updateView(); titleScreen(); requestAnimationFrame(tick);
+
+/* ---------------- DEV TOOLS (temporary, remove before release) ----------------
+   Open the game with ?dev to get a panel that loads any map at any intensity and jumps
+   to its intro, its build phase, or straight to the disaster. Pass-and-play only. */
+if(new URLSearchParams(location.search).has('dev')){
+  const BANDS = {baha:[1,2], lindol:[6,7,8,9], bagyo:[3,4,5]};   // new hazards add their levels here
+  const dev = document.createElement('div');
+  dev.id = 'devPanel';
+  dev.innerHTML = '<b>DEV</b><select id="devMap"></select><select id="devLvl"></select>'+
+    '<button data-dev="broll">B-roll</button><button data-dev="build">Build</button><button data-dev="hit">Disaster</button>';
+  document.body.appendChild(dev);
+  const st = document.createElement('style');
+  st.textContent = '#devPanel{position:fixed;z-index:8;left:12px;bottom:12px;display:flex;flex-wrap:wrap;gap:6px;align-items:center;padding:8px;border-radius:12px;background:rgba(11,9,16,.85);color:#fff;font:600 13px system-ui,sans-serif;max-width:calc(100vw - 24px)}'+
+    '#devPanel b{color:#FFD166}#devPanel select,#devPanel button{font:inherit;padding:5px 8px;border-radius:8px;border:1px solid #555;background:#2A2233;color:#fff;cursor:pointer}';
+  document.head.appendChild(st);
+  const mapSel = dev.querySelector('#devMap'), lvlSel = dev.querySelector('#devLvl');
+  Object.keys(LOC).forEach(hz=>mapSel.add(new Option(HZ[hz].name+' ('+LOC[hz].name+')', hz)));
+  const fillLvls = ()=>{ lvlSel.textContent = ''; (BANDS[mapSel.value]||[1]).forEach(l=>lvlSel.add(new Option('Level '+l, l))); };
+  mapSel.addEventListener('change',fillLvls); fillLvls();
+  // a fresh one-round match on the chosen map; the actual strength is forced to the chosen level
+  const load = ()=>{
+    haltPlay(); stopRoom();
+    newMatch(Math.floor(Math.random()*90000)+10000);
+    G.forceHz = mapSel.value; setupRound();
+    G.actual = +lvlSel.value; G.band = [G.actual, G.actual];
+  };
+  const stage = ()=>{
+    hideOverlay(); setSky('build'); setHud();
+    houses.forEach((h,pi)=>{ removeHouse(pi); placePeople(pi,false); });
+    rain.visible = false; buildLandscape(G.hz); resetWater(); paintTerrain(); setGameCam();
+  };
+  dev.addEventListener('click',e=>{
+    const b = e.target.closest('[data-dev]'); if(!b) return;
+    load();
+    if(b.dataset.dev==='broll') babalaScreen();
+    else if(b.dataset.dev==='build'){ stage(); startBuild(0); }
+    else {
+      stage();
+      G.picks.forEach(p=>{ p.type = 'chb'; p.anchor = {ax:1, ar:1}; p.auto = true; });
+      runDisaster();
+    }
+  });
+}
 // a scanned QR code opens ?room=CODE: join straight away
 const roomParam = new URLSearchParams(location.search).get('room');
 if(roomParam && window.SingkaNet && SingkaNet.enabled) joinRoom(roomParam);
