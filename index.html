@@ -608,7 +608,7 @@ function faultStrip(){
   m.receiveShadow = true;
   return m;
 }
-const landMat = new THREE.MeshToonMaterial({vertexColors:true,gradientMap:gradMap});
+const landMat = new THREE.MeshToonMaterial({vertexColors:true,gradientMap:gradMap,flatShading:true});
 const plainMat = c=>tmat(c);
 let landscape = null, currentLoc = null;
 const seaMat = new THREE.MeshLambertMaterial({color:'#3FA7D6',transparent:true,opacity:.84,depthWrite:false});
@@ -643,13 +643,25 @@ function buildLandscape(hz){
   currentLoc = LOC[hz];
   const kind = currentLoc.kind;
   landscape = new THREE.Group(); scene.add(landscape);
-  // shared vertices, so colors and lighting blend smoothly between neighbouring triangles
-  const geo = new THREE.PlaneGeometry(170,170,140,140).rotateX(-Math.PI/2);
+  // Low-poly ground: jitter the grid so triangles look hand-cut, then give each flat-shaded
+  // face the smoothly blended color at its center plus a small brightness shift.
+  const SEG = 96, cell = 170/SEG, jr = mulberry32(kind.length*7919);
+  const grid = new THREE.PlaneGeometry(170,170,SEG,SEG).rotateX(-Math.PI/2);
+  const gp = grid.attributes.position;
+  for(let i=0;i<gp.count;i++){
+    let x=gp.getX(i), z=gp.getZ(i);
+    const edge = Math.abs(x)>84.9 || Math.abs(z)>84.9;
+    const b = flatBlend(x,z);   // 0 in the flat play area, 1 out in the landscape
+    if(!edge){ x += (jr()-.5)*cell*.7*b; z += (jr()-.5)*cell*.7*b; }
+    gp.setXYZ(i, x, heightAt(kind,x,z) - .06 + (jr()-.5)*.2*b, z);
+  }
+  const geo = grid.toNonIndexed(); grid.dispose();
   const pos = geo.attributes.position, cols = new Float32Array(pos.count*3), col = new THREE.Color();
-  for(let i=0;i<pos.count;i++){
-    const x=pos.getX(i), z=pos.getZ(i), h=heightAt(kind,x,z);
-    pos.setY(i,h-.06);
-    colorAt(kind,x,z,h,col); cols[i*3]=col.r; cols[i*3+1]=col.g; cols[i*3+2]=col.b;
+  for(let i=0;i<pos.count;i+=3){
+    const cx=(pos.getX(i)+pos.getX(i+1)+pos.getX(i+2))/3, cz=(pos.getZ(i)+pos.getZ(i+1)+pos.getZ(i+2))/3;
+    colorAt(kind,cx,cz,heightAt(kind,cx,cz),col);
+    col.multiplyScalar(.95 + jr()*.1);
+    for(let j=0;j<3;j++){ cols[(i+j)*3]=col.r; cols[(i+j)*3+1]=col.g; cols[(i+j)*3+2]=col.b; }
   }
   geo.setAttribute('color',new THREE.BufferAttribute(cols,3));
   geo.computeVertexNormals();
