@@ -385,8 +385,21 @@ const camera = new THREE.PerspectiveCamera(36,1,.1,260);
 camera.position.set(0,12.5,16.5);
 const controls = new THREE.OrbitControls(camera,canvas);
 controls.target.set(0,-.4,-1.1);
-controls.enableDamping = true; controls.enablePan = false;
+controls.enableDamping = true;
+// Ctrl + left drag pans on desktop, two-finger drag pans on touch (built into OrbitControls)
+controls.enablePan = true; controls.screenSpacePanning = false;
 controls.minDistance = 9; controls.maxDistance = 30; controls.maxPolarAngle = 1.35;
+// keep the pan target over the landscape so the view can't drift into the fog
+const PAN_BOUNDS = {x:28, zMin:-28, zMax:18};
+const panFix = new THREE.Vector3();
+function clampPan(){
+  const t = controls.target;
+  panFix.set(
+    Math.max(-PAN_BOUNDS.x,Math.min(PAN_BOUNDS.x,t.x)) - t.x, 0,
+    Math.max(PAN_BOUNDS.zMin,Math.min(PAN_BOUNDS.zMax,t.z)) - t.z
+  );
+  if(panFix.x||panFix.z){ t.add(panFix); camera.position.add(panFix); }
+}
 
 const hemi = new THREE.HemisphereLight('#FFD9C2','#6B5A8C',.5); scene.add(hemi);
 const sun = new THREE.DirectionalLight('#FFC79A',.9);
@@ -770,6 +783,7 @@ function titleScreen(){
     '<h1>SingkaTibay</h1>'+
     '<p class="lede">Two players, one device. Each of you gets the same lot, the same budget, and the same warning. Build in secret, then watch both houses face the same disaster.</p>'+
     '<ol><li>Pick a starting house and where to put it.</li><li>Spend your Pondo on retrofits.</li><li>Tell your 3 residents what to do when it hits.</li><li>Lives count most. Best of 3 rounds wins.</li></ol>'+
+    '<p class="hint" style="margin:-6px 0 16px">Drag to look around. Ctrl + drag (two fingers on a phone) to move across the map.</p>'+
     '<button class="btn" data-act="start">Start a match</button>'
   );
 }
@@ -1051,7 +1065,7 @@ function tick(now){
     const t = Math.min(1,fly.elapsed/fly.dur), e = ease(t);
     camera.position.copy(fly.pc.getPointAt(e)); camera.lookAt(fly.lc.getPointAt(e));
     if(t>=1) endFly();
-  } else controls.update();
+  } else { controls.update(); clampPan(); }
   if(!anim && currentLoc && currentLoc.kind==='beach' && sea.visible && phase!=='results') sea.position.y = currentLoc.waterY + Math.sin(now/900)*.06;
   if(sea.visible) waveSea(now/1000, (anim && G.hz!=='lindol') || phase==='results' ? .45 : .14);
   renderer.render(scene,camera);
