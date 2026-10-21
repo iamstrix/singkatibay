@@ -43,6 +43,16 @@ button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
 .brand span{font-size:13px;color:var(--ink-2)}
 .timer{display:none;background:var(--gold);color:#2A2233;border-radius:14px;padding:8px 14px;font-weight:800;font-size:22px;font-variant-numeric:tabular-nums;min-width:74px;text-align:center}
 .timer.low{background:#E63946;color:#fff}
+.hudR{display:flex;flex-direction:column;align-items:flex-end;gap:6px}
+.opp{display:none;align-items:flex-start;gap:8px;max-width:min(240px,56vw);padding:6px 10px;border:1px solid var(--line);border-radius:12px;background:var(--panel);font-size:13px;line-height:1.35;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.opp.on{display:flex}
+.opp .dot{width:10px;height:10px;margin-top:4px}
+.opp b{overflow-wrap:anywhere}
+.opp small{display:block;font-size:12px;color:var(--ink-2)}
+.opp.locked{background:var(--gold);color:#2A2233;border-color:transparent;animation:pop .35s ease-out}
+.opp.locked small{color:#5E5468}
+@keyframes pop{0%{transform:scale(.85)}60%{transform:scale(1.06)}100%{transform:scale(1)}}
+@media (prefers-reduced-motion: reduce){.opp.locked{animation:none}}
 
 .panel{position:fixed;z-index:3;top:calc(76px + env(safe-area-inset-top,0px));right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:390px;background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow-y:auto;overscroll-behavior:contain;padding:16px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:none}
 .panel.on{display:block}
@@ -161,6 +171,8 @@ h3{margin:18px 0 8px;font-size:16px;font-weight:800}
 .players li.is-ready .st{color:var(--good)}
 .cue{margin:12px 0;min-height:1.45em;text-align:center;font-size:14px;color:var(--ink-2)}
 .cue.on{padding:8px 12px;border-radius:12px;background:var(--gold);color:#2A2233}
+.lock .cue{margin:0 0 10px}
+.cue:empty{display:none}
 .btn:disabled{opacity:.6;cursor:default}
 @keyframes pulse{0%,100%{box-shadow:0 0 0 0 rgba(255,209,102,.9)}50%{box-shadow:0 0 0 6px rgba(255,209,102,0)}}
 .btn.pulse{animation:pulse 1.4s ease-in-out infinite}
@@ -172,7 +184,10 @@ h3{margin:18px 0 8px;font-size:16px;font-weight:800}
 <canvas id="stage" aria-label="Two floating island lots side by side with an evacuation center between them"></canvas>
 <div class="hud">
   <div class="brand"><b>SingkaTibay</b><span id="hudInfo">Disaster-ready build battle</span></div>
-  <div class="timer" id="timer" aria-live="off">60</div>
+  <div class="hudR">
+    <div class="timer" id="timer" aria-live="off">60</div>
+    <div class="opp" id="oppChip" aria-live="polite"></div>
+  </div>
 </div>
 <div id="intro" role="button" tabindex="0" aria-label="Skip the location flyover"><p id="introRound"></p><b id="introName"></b><span id="introSub"></span><small>Tap to skip</small></div>
 <div id="callout" aria-live="assertive"><b id="calloutBig"></b><span id="calloutSub"></span></div>
@@ -936,15 +951,20 @@ function startBuild(pi){
   houses.forEach((h,i)=>{ if(h) h.g.visible = i===pi; });
   placePeople(1-pi,false);
   endAt = performance.now() + (online ? buildDeadline() - SingkaNet.serverTime() : BUILD_SECONDS*1000);
-  timerEl.style.display='block';
   clearInterval(timerId);
-  timerId = setInterval(()=>{
+  const tickTimer = ()=>{
     const left = Math.max(0,(endAt-performance.now())/1000);
     timerEl.textContent = Math.ceil(left);
     timerEl.classList.toggle('low',left<=10);
     if(left<=0) lockIn();
-  },200);
+  };
+  // draw the timer before showing it, so the previous round's number never flashes
+  tickTimer();
+  if(phase!=='build') return;   // time had already run out, so the tick locked in
+  timerEl.style.display='block';
+  timerId = setInterval(tickTimer,200);
   renderBuild(); panel.classList.add('on'); panel.scrollTop=0; updateView();
+  updateOppChip();
 }
 function bars(v){ let h='<div class="bar">'; for(let i=1;i<=5;i++) h+='<i class="'+(v>=i-.25?'on':'')+'"></i>'; return h+'</div>'; }
 function renderBuild(){
@@ -1144,8 +1164,9 @@ function showResults(){
   h += '<div class="winner" style="background:'+(w<0?'var(--chip)':TEAM[w])+';color:'+(w<0?'var(--ink)':'#fff')+'">'+(w<0?'Tabla! This round is a draw.':esc(pname(w))+' wins the round'+(best&&best.pi===w?'. Ang tibay!':'.'))+'</div>';
   h += '<p class="sub" style="text-align:center;margin-top:6px">Rounds won: '+esc(pname(0))+', '+G.wins[0]+'. '+esc(pname(1))+', '+G.wins[1]+'.</p>';
   const last = G.round>=2 || G.wins[0]===2 || G.wins[1]===2;
-  h += '<div class="lock"><button class="btn" data-act="next">'+(last?'See the match result':'Next round')+'</button></div>';
+  h += '<div class="lock"><p class="cue" id="nextCue" role="status"></p><button class="btn" data-act="next">'+(last?'See the match result':'Next round')+'</button></div>';
   panel.innerHTML = h; panel.classList.add('on'); panel.scrollTop=0; updateView();
+  if(online && !last) updateNextCue();
   const nb = panel.querySelector('[data-act="next"]');
   nb.addEventListener('click',()=>{
     if(last) finalScreen();
@@ -1190,7 +1211,7 @@ function netError(e){
 function netCall(fn,args){ SingkaNet.rpc(fn,args).then(syncOnline).catch(netError); }
 // stops anything still counting down so it can't act on a room that is gone
 function haltPlay(){
-  phase='halted'; clearInterval(timerId); clearInterval(countdownId); timerEl.style.display='none'; clearGhost();
+  phase='halted'; clearInterval(timerId); clearInterval(countdownId); timerEl.style.display='none'; clearGhost(); updateOppChip();
   panel.classList.remove('on'); anim=null; world.position.set(0,0,0);
   if(fly){ fly=null; intro.classList.remove('on'); controls.enabled=true; setGameCam(); }
 }
@@ -1312,8 +1333,14 @@ async function pollRoom(){
     syncOnline(r);
   }catch(e){ /* try again on the next poll */ }
 }
+const STATUS_ORDER = {lobby:0, build:1, reveal:2, closed:3};
+// true if r is older than what we already have (a slow poll answering after a newer update)
+function staleRoom(r,cur){
+  if(r.version!=null && cur.version!=null) return r.version < cur.version;
+  return r.round < cur.round || (r.round===cur.round && STATUS_ORDER[r.status] < STATUS_ORDER[cur.status]);
+}
 function syncOnline(r){
-  if(!online || !r || r.id!==online.room.id) return;
+  if(!online || !r || r.id!==online.room.id || staleRoom(r,online.room)) return;
   const prev = online.room, guestChanged = r.guest!==prev.guest;
   online.room = r;
   if(r.status==='closed'){
@@ -1329,7 +1356,30 @@ function syncOnline(r){
     return;
   }
   if(phase==='results' && r.status==='build' && r.round===G.round+1){ G.round=r.round; setupRound(); babalaScreen(); return; }
+  if(phase==='results'){ updateNextCue(); return; }
+  if(phase==='build'){ updateOppChip(); return; }
   if(phase==='waiting' && r.status==='reveal' && r.round===G.round) reveal();
+}
+const oppFlag = key=> online.room[key+(1-online.me)];
+const myFlag = key=> online.room[key+online.me];
+// between rounds: nudge the player who hasn't pressed Next round yet
+function updateNextCue(){
+  const cue = document.getElementById('nextCue'), nb = panel.querySelector('[data-act="next"]');
+  if(!online || !cue || !nb || matchOver()) return;
+  const nudge = oppFlag('ready') && !myFlag('ready');
+  cue.innerHTML = nudge ? '<b>'+esc(pname(1-online.me))+' is ready</b> for the next round.' : '';
+  cue.classList.toggle('on',nudge); nb.classList.toggle('pulse',nudge);
+}
+// during building: show whether the opponent has locked in (they get first pick of evacuation spaces)
+function updateOppChip(){
+  const chip = document.getElementById('oppChip');
+  if(!online || phase!=='build'){ chip.className = 'opp'; chip.textContent = ''; return; }
+  const opp = 1-online.me, locked = !!oppFlag('locked');
+  if(chip.dataset.state===(locked?'locked':'building') && chip.classList.contains('on')) return;
+  chip.dataset.state = locked ? 'locked' : 'building';
+  chip.className = 'opp on' + (locked ? ' locked' : '');
+  chip.innerHTML = '<span class="dot" style="background:'+TEAM[opp]+'"></span><span><b>'+esc(pname(opp))+'</b> '+
+    (locked ? 'locked in ✓' + (G.hz!=='lindol' ? '<small>First pick of evacuation spaces</small>' : '') : 'is building…')+'</span>';
 }
 function startCountdown(){
   clearInterval(countdownId);
@@ -1343,7 +1393,7 @@ function startCountdown(){
   countdownId = setInterval(step,200); step();
 }
 function sendLockIn(p){
-  phase='waiting';
+  phase='waiting'; updateOppChip();
   showOverlay('<h2>Locked in</h2><p class="lede">Waiting for '+esc(pname(1-online.me))+' to lock in…</p><div style="height:16px"></div><button class="btn ghost" data-act="leave">Leave match</button>');
   const pick = {type:p.type, anchor:p.anchor, retro:[...p.retro], actions:p.actions, auto:!!p.auto};
   // if this fails (e.g. the round already timed out), the next poll picks up the room state
