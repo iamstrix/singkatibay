@@ -74,6 +74,7 @@ h3{margin:18px 0 8px;font-size:16px;font-weight:800}
 .t-low{background:repeating-linear-gradient(-45deg,#3B82C4 0 5px,#CFE6F7 5px 10px)}
 .lot button.fp{outline:3px solid var(--ink);outline-offset:-3px}
 .lot button.fp::after{content:"";position:absolute;inset:30%;border-radius:50%;background:var(--ink)}
+.lot button.pv{outline:3px dashed var(--ink);outline-offset:-3px}
 .border{writing-mode:vertical-rl;font-size:12px;color:var(--ink-2);border:2px dashed var(--ink-2);border-radius:8px;display:flex;align-items:center;justify-content:center;padding:4px 2px}
 .legend{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:8px;font-size:12px;color:var(--ink-2)}
 .legend span{display:inline-flex;align-items:center;gap:6px}
@@ -474,7 +475,7 @@ lots.forEach((g,pi)=>{
   const cx = islandX(pi);
   for(let c=0;c<5;c++){ tiles[pi][c]=[]; for(let r=0;r<5;r++){
     const m = new THREE.Mesh(unitBox,TILE_MAT.solid);
-    m.scale.set(.98,1,.98); m.position.set(lotX(pi,c),0,lotZ(r)); m.receiveShadow=true;
+    m.scale.set(.98,1,.98); m.position.set(lotX(pi,c),0,lotZ(r)); m.receiveShadow=true; m.userData = {c,r};
     g.add(m); tiles[pi][c][r]=m;
   }}
   box(g,TEAM[pi],5.12,.12,.1,cx,.56,-2.55,{outline:false});
@@ -561,7 +562,7 @@ function waveSea(t,amp){
   pa.needsUpdate = true; seaGeo.computeVertexNormals();
 }
 sea.renderOrder = 2; scene.add(sea);
-function disposeGroup(g){ g.traverse(o=>{ if(o.geometry && o.geometry!==unitBox) o.geometry.dispose(); }); }
+function disposeGroup(g){ g.traverse(o=>{ if(o.geometry && o.geometry!==unitBox && o.geometry!==unitEdges) o.geometry.dispose(); }); }
 function palm(g,x,z,rng){
   const y = heightAt(currentLoc.kind,x,z), lean = (rng()-.5)*.5, dir = rng()*Math.PI*2;
   const p = new THREE.Group(); p.position.set(x,y,z); p.rotation.y = dir; g.add(p);
@@ -704,14 +705,22 @@ function personMesh(color){
 }
 for(let pi=0;pi<2;pi++) for(let i=0;i<3;i++){ const m=personMesh(TEAM[pi]); m.visible=false; world.add(m); people[pi].push(m); }
 
+function removeHouse(pi){
+  if(houses[pi]){ world.remove(houses[pi].g); disposeGroup(houses[pi].g); houses[pi]=null; }
+}
 function buildHouse(pi){
-  if(houses[pi]){ world.remove(houses[pi].g); houses[pi]=null; }
+  removeHouse(pi);
   const p = G.picks[pi];
   if(!p.type || !p.anchor) { placePeople(pi,false); return; }
+  houses[pi] = makeHouse(pi,p,p.anchor);
+  world.add(houses[pi].g);
+  placePeople(pi,true);
+}
+// the house model for pick p with its 2×2 footprint at anchor a (also used for the hover preview)
+function makeHouse(pi,p,a){
   const s = stats(p), type = p.type, has = id=>p.retro.has(id);
   const g = new THREE.Group(), lower = new THREE.Group(), upper = new THREE.Group(), roof = new THREE.Group();
   g.add(lower); g.add(upper); g.add(roof);
-  const a = p.anchor;
   const cx = (lotX(pi,a.ax)+lotX(pi,a.ax+1))/2, cz = (lotZ(a.ar)+lotZ(a.ar+1))/2;
   g.position.set(cx,.5,cz);
   let base = 0;
@@ -749,10 +758,86 @@ function buildHouse(pi){
   const rm = new THREE.Mesh(cone,tmat(roofSpec[0])); rm.rotation.y=Math.PI/4; rm.position.y=topY+roofSpec[1]/2; rm.castShadow=true; roof.add(rm);
   const rol = new THREE.Mesh(cone,outlineMat); rol.rotation.y=Math.PI/4; rol.position.copy(rm.position); rol.scale.setScalar(1.05); roof.add(rol);
   if(has('straps')) [Math.PI/4,-Math.PI/4].forEach(ry=>box(roof,'#2F2A2A',2.3,.05,.08,0,topY+.06,0,{ry,outline:false}));
-  world.add(g);
-  houses[pi] = {g,lower,upper,roof,s,base:g.position.clone()};
-  placePeople(pi,true);
+  return {g,lower,upper,roof,s,base:g.position.clone()};
 }
+
+/* ----- Placement preview ----- */
+// A see-through copy of the current house follows the hovered tile (3D island or panel grid).
+const ghostMat = new THREE.MeshBasicMaterial({color:'#FFFFFF',transparent:true,opacity:.18,depthWrite:false});
+const ghostLineMat = new THREE.LineBasicMaterial({color:'#FFFFFF',transparent:true,opacity:.95,depthWrite:false});
+const unitEdges = new THREE.EdgesGeometry(unitBox);
+const ghostPlate = new THREE.Mesh(new THREE.PlaneGeometry(1.96,1.96).rotateX(-Math.PI/2),
+  new THREE.MeshBasicMaterial({color:'#FFFFFF',transparent:true,opacity:.5,depthWrite:false}));
+ghostPlate.renderOrder = 4; ghostPlate.visible = false; world.add(ghostPlate);
+let ghost = null, ghostKey = '';
+const anchorFor = (c,r)=> ({ax:Math.min(3,c), ar:Math.min(3,r)});
+function clearGhost(){
+  ghostKey = ''; ghostPlate.visible = false;
+  if(ghost){ world.remove(ghost); disposeGroup(ghost); ghost = null; }
+  panel.querySelectorAll('.lot button.pv').forEach(b=>b.classList.remove('pv'));
+}
+function previewAt(c,r){
+  if(phase!=='build' || c==null){ clearGhost(); return; }
+  const pi = active, p = G.picks[pi], a = anchorFor(c,r);
+  if(p.anchor && p.anchor.ax===a.ax && p.anchor.ar===a.ar){ clearGhost(); return; }
+  const key = pi+':'+a.ax+','+a.ar+':'+p.type+':'+[...p.retro].join();
+  if(key===ghostKey) return;
+  clearGhost(); ghostKey = key;
+  ghostPlate.material.color.set(TEAM[pi]);
+  ghostPlate.position.set((lotX(pi,a.ax)+lotX(pi,a.ax+1))/2, .51, (lotZ(a.ar)+lotZ(a.ar+1))/2);
+  ghostPlate.visible = true;
+  if(p.type){
+    ghostMat.color.set(TEAM[pi]); ghostLineMat.color.set(TEAM[pi]);
+    ghost = makeHouse(pi,p,a).g;
+    const meshes = []; ghost.traverse(o=>{ if(o.isMesh) meshes.push(o); });
+    // light team-colored tint plus crisp edges on the main parts, so the shape reads clearly
+    meshes.forEach(o=>{
+      if(o.material===outlineMat){ o.visible = false; return; }
+      o.material = ghostMat; o.castShadow = false; o.receiveShadow = false; o.renderOrder = 4;
+      const isBox = o.geometry===unitBox;
+      if(isBox && Math.min(o.scale.x,o.scale.y,o.scale.z) < .06) return;   // skip windows, door, straps
+      const e = new THREE.LineSegments(isBox ? unitEdges : new THREE.EdgesGeometry(o.geometry), ghostLineMat);
+      e.position.copy(o.position); e.rotation.copy(o.rotation); e.scale.copy(o.scale); e.renderOrder = 5;
+      o.parent.add(e);
+    });
+    world.add(ghost);
+  }
+  const fp = fpTiles(a).map(t=>t.join(','));
+  panel.querySelectorAll('.lot button').forEach(b=>{ if(fp.includes(b.dataset.c+','+b.dataset.r)) b.classList.add('pv'); });
+}
+function placeAt(c,r){
+  G.picks[active].anchor = anchorFor(c,r);
+  clearGhost(); buildHouse(active); renderBuild();
+}
+// pointer on the 3D island: hover previews, click or tap places
+const ray = new THREE.Raycaster(), ndc = new THREE.Vector2();
+function tileAt(e){
+  const rect = canvas.getBoundingClientRect();
+  ndc.set((e.clientX-rect.left)/rect.width*2-1, -(e.clientY-rect.top)/rect.height*2+1);
+  ray.setFromCamera(ndc,camera);
+  const hit = ray.intersectObjects(tiles[active].flat(),false)[0];
+  return hit ? hit.object.userData : null;
+}
+const downs = new Map(); let multiTouch = false;
+canvas.addEventListener('pointerdown',e=>{
+  downs.set(e.pointerId,{x:e.clientX,y:e.clientY});
+  if(downs.size>1) multiTouch = true;   // two-finger pan or pinch, not a tap
+});
+canvas.addEventListener('pointermove',e=>{
+  if(phase!=='build' || e.pointerType==='touch') return;
+  if(e.buttons){ clearGhost(); return; }   // dragging the camera
+  const t = tileAt(e); previewAt(t ? t.c : null, t ? t.r : null);
+});
+canvas.addEventListener('pointerleave',()=>{ if(phase==='build') clearGhost(); });
+const pointerEnd = e=>{
+  const d = downs.get(e.pointerId); downs.delete(e.pointerId);
+  const wasMulti = multiTouch; if(!downs.size) multiTouch = false;
+  if(e.type!=='pointerup' || phase!=='build' || !d || wasMulti || e.button!==0 || e.ctrlKey || e.metaKey || e.shiftKey) return;
+  if(Math.hypot(e.clientX-d.x,e.clientY-d.y)>6) return;   // the camera was dragged
+  const t = tileAt(e); if(t) placeAt(t.c,t.r);
+};
+canvas.addEventListener('pointerup',pointerEnd);
+canvas.addEventListener('pointercancel',pointerEnd);
 function placePeople(pi,show){
   const p = G.picks[pi];
   people[pi].forEach((m,i)=>{
@@ -807,7 +892,7 @@ function titleScreen(){
 }
 function babalaScreen(){
   phase='babala'; setSky('build'); setHud();
-  houses.forEach((h,pi)=>{ if(h) world.remove(h.g); houses[pi]=null; placePeople(pi,false); });
+  houses.forEach((h,pi)=>{ removeHouse(pi); placePeople(pi,false); });
   rain.visible=false;
   buildLandscape(G.hz); resetWater();
   paintTerrain();
@@ -878,7 +963,7 @@ function renderBuild(){
   const borderHtml = '<div class="border">Shared border</div>';
   h += pi===0 ? lotHtml+borderHtml : borderHtml+lotHtml;
   h += '</div><div class="legend"><span><i class="t-solid"></i>Solid</span><span><i class="t-liq"></i>Liquefaction-prone</span><span><i class="t-low"></i>Low ground</span></div>';
-  h += '<p class="hint">Tap a tile to place your 2×2 house there.</p>';
+  h += '<p class="hint">Tap a tile here or on your island to place your 2×2 house. With a mouse, hover first to preview it.</p>';
   h += '<h3>Retrofits</h3><div class="retros">';
   RETRO.forEach(r=>{
     if(!retroAllowed(r,p.type)) return;
@@ -902,7 +987,7 @@ function renderBuild(){
 
 function lockIn(){
   if(phase!=='build') return;
-  clearInterval(timerId); timerEl.style.display='none';
+  clearInterval(timerId); timerEl.style.display='none'; clearGhost();
   const p = G.picks[active];
   p.left = Math.max(0,Math.floor((endAt-performance.now())/1000));
   if(!p.type){ p.type='chb'; p.auto=true; }
@@ -922,14 +1007,20 @@ panel.addEventListener('click',e=>{
     [...p.retro].forEach(id=>{ if(!retroAllowed(RETRO.find(r=>r.id===id),p.type)) p.retro.delete(id); });
     while(spent(p)>BUDGET){ const last=[...p.retro].pop(); p.retro.delete(last); }
   } else if(act==='tile'){
-    p.anchor = {ax:Math.min(3,+b.dataset.c), ar:Math.min(3,+b.dataset.r)};
+    placeAt(+b.dataset.c,+b.dataset.r); return;
   } else if(act==='retro'){
     const id=b.dataset.v; if(p.retro.has(id)) p.retro.delete(id); else p.retro.add(id);
   } else if(act==='res'){
     p.actions[+b.dataset.i] = b.dataset.v;
   } else if(act==='lock'){ lockIn(); return; }
-  buildHouse(active); renderBuild();
+  clearGhost(); buildHouse(active); renderBuild();
 });
+// hovering or keyboard-focusing a tile in the panel grid previews the house on the island
+const gridTile = el=> el && el.closest ? el.closest('.lot [data-act=tile]') : null;
+panel.addEventListener('mouseover',e=>{ const b = gridTile(e.target); if(b) previewAt(+b.dataset.c,+b.dataset.r); });
+panel.addEventListener('mouseout',e=>{ if(gridTile(e.target) && !gridTile(e.relatedTarget)) clearGhost(); });
+panel.addEventListener('focusin',e=>{ const b = gridTile(e.target); if(b) previewAt(+b.dataset.c,+b.dataset.r); });
+panel.addEventListener('focusout',e=>{ if(gridTile(e.target) && !gridTile(e.relatedTarget)) clearGhost(); });
 sheet.addEventListener('click',e=>{
   const b = e.target.closest('[data-act]'); if(!b) return;
   const act=b.dataset.act;
@@ -1086,7 +1177,7 @@ function netError(e){
 function netCall(fn,args){ SingkaNet.rpc(fn,args).then(syncOnline).catch(netError); }
 // stops anything still counting down so it can't act on a room that is gone
 function haltPlay(){
-  phase='halted'; clearInterval(timerId); clearInterval(countdownId); timerEl.style.display='none';
+  phase='halted'; clearInterval(timerId); clearInterval(countdownId); timerEl.style.display='none'; clearGhost();
   panel.classList.remove('on'); anim=null; world.position.set(0,0,0);
   if(fly){ fly=null; intro.classList.remove('on'); controls.enabled=true; setGameCam(); }
 }
