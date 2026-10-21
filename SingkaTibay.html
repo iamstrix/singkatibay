@@ -1,0 +1,1065 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>SingkaTibay</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:opsz,wght@12..96,400;12..96,600;12..96,800&display=swap" rel="stylesheet">
+<style>
+:root{
+  --bg:#E9DDF0; --panel:rgba(255,255,255,.9); --ink:#2A2233; --ink-2:#5E5468; --line:rgba(42,34,51,.14);
+  --chip:#FFFFFF; --chip-on:#2A2233; --chip-on-ink:#FFFFFF; --p1:#E63946; --p2:#1D4ED8; --gold:#FFD166;
+  --good:#1F8A4C; --warn:#B4231B; --mid:#A15C00; color-scheme:light;
+  box-sizing:border-box; padding-top:env(safe-area-inset-top,0px); padding-bottom:env(safe-area-inset-bottom,0px);
+}
+@media (prefers-color-scheme: dark){
+  :root:not([data-theme="light"]){
+    --bg:#1A1522; --panel:rgba(30,24,40,.92); --ink:#F3EEF7; --ink-2:#B9AEC6; --line:rgba(255,255,255,.14);
+    --chip:#2E2639; --chip-on:#F3EEF7; --chip-on-ink:#1A1522; --p1:#FF6B74; --p2:#7AA2FF; --gold:#FFD166;
+    --good:#5ED38F; --warn:#FF8A80; --mid:#F2B25C; color-scheme:dark;
+  }
+}
+:root[data-theme="dark"]{
+  --bg:#1A1522; --panel:rgba(30,24,40,.92); --ink:#F3EEF7; --ink-2:#B9AEC6; --line:rgba(255,255,255,.14);
+  --chip:#2E2639; --chip-on:#F3EEF7; --chip-on-ink:#1A1522; --p1:#FF6B74; --p2:#7AA2FF; --gold:#FFD166;
+  --good:#5ED38F; --warn:#FF8A80; --mid:#F2B25C; color-scheme:dark;
+}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{height:100%;margin:0}
+*,*::before,*::after{box-sizing:inherit}
+body{background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",ui-sans-serif,system-ui,-apple-system,"Segoe UI",Roboto,sans-serif;overflow:hidden;font-size:15px;line-height:1.45}
+button{font:inherit;color:inherit}
+button:focus-visible{outline:3px solid var(--gold);outline-offset:2px}
+#sky,#stage{position:fixed;inset:0}
+#sky{z-index:0;transition:background 1s}
+#stage{z-index:1;display:block;width:100%;height:100%;touch-action:none}
+
+.hud{position:fixed;z-index:3;top:0;left:0;right:0;display:flex;justify-content:space-between;align-items:flex-start;gap:8px;padding:calc(12px + env(safe-area-inset-top,0px)) 12px 0;pointer-events:none}
+.hud > *{pointer-events:auto}
+.brand{background:var(--panel);border:1px solid var(--line);border-radius:14px;padding:8px 12px;backdrop-filter:blur(10px);-webkit-backdrop-filter:blur(10px)}
+.brand b{font-weight:800;font-size:18px;letter-spacing:-.01em;display:block;line-height:1.1}
+.brand span{font-size:13px;color:var(--ink-2)}
+.timer{display:none;background:var(--gold);color:#2A2233;border-radius:14px;padding:8px 14px;font-weight:800;font-size:22px;font-variant-numeric:tabular-nums;min-width:74px;text-align:center}
+.timer.low{background:#E63946;color:#fff}
+
+.panel{position:fixed;z-index:3;top:calc(76px + env(safe-area-inset-top,0px));right:12px;bottom:calc(12px + env(safe-area-inset-bottom,0px));width:390px;background:var(--panel);border:1px solid var(--line);border-radius:18px;overflow-y:auto;overscroll-behavior:contain;padding:16px;backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px);display:none}
+.panel.on{display:block}
+@media (max-width:820px){
+  .panel{top:auto;left:8px;right:8px;width:auto;bottom:calc(8px + env(safe-area-inset-bottom,0px));max-height:56vh;padding:14px}
+}
+.who{display:flex;align-items:center;gap:10px;margin:0 0 4px}
+.dot{width:14px;height:14px;border-radius:50%;flex:none}
+h2{margin:0;font-size:24px;line-height:1.15;font-weight:800;letter-spacing:-.01em}
+h3{margin:18px 0 8px;font-size:16px;font-weight:800}
+.sub{margin:2px 0 0;color:var(--ink-2);font-size:14px}
+.pondo{display:flex;justify-content:space-between;align-items:baseline;margin-top:12px;padding:10px 12px;border-radius:12px;background:var(--chip);border:1px solid var(--line)}
+.pondo b{font-size:20px;font-variant-numeric:tabular-nums}
+.types{display:grid;gap:8px}
+.card{display:block;width:100%;text-align:left;border:1px solid var(--line);background:var(--chip);border-radius:14px;padding:10px 12px;cursor:pointer}
+.card[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.card .row{display:flex;justify-content:space-between;gap:8px;font-weight:700}
+.card .row span{font-weight:600;color:var(--ink-2);font-variant-numeric:tabular-nums}
+.card p{margin:4px 0 0;font-size:13px;color:var(--ink-2)}
+.stats{display:grid;grid-template-columns:auto 1fr;gap:4px 10px;align-items:center;margin-top:10px;font-size:13px}
+.bar{display:flex;gap:3px}
+.bar i{display:block;height:8px;flex:1;border-radius:3px;background:var(--line)}
+.bar i.on{background:var(--ink)}
+.gridwrap{display:flex;gap:10px;align-items:stretch}
+.lot{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;flex:1;max-width:240px;aspect-ratio:1}
+.lot button{border:0;border-radius:5px;cursor:pointer;padding:0;position:relative}
+.t-solid{background:#A8D58A}
+.t-liq{background:repeating-linear-gradient(45deg,#F06A4A 0 5px,#FFE2C8 5px 10px)}
+.t-low{background:repeating-linear-gradient(-45deg,#3B82C4 0 5px,#CFE6F7 5px 10px)}
+.lot button.fp{outline:3px solid var(--ink);outline-offset:-3px}
+.lot button.fp::after{content:"";position:absolute;inset:30%;border-radius:50%;background:var(--ink)}
+.border{writing-mode:vertical-rl;font-size:12px;color:var(--ink-2);border:2px dashed var(--ink-2);border-radius:8px;display:flex;align-items:center;justify-content:center;padding:4px 2px}
+.legend{display:flex;flex-wrap:wrap;gap:6px 12px;margin-top:8px;font-size:12px;color:var(--ink-2)}
+.legend span{display:inline-flex;align-items:center;gap:6px}
+.legend i{display:inline-block;width:14px;height:14px;border-radius:3px}
+.retros{display:grid;gap:6px}
+.retro{display:flex;gap:10px;align-items:flex-start;text-align:left;width:100%;border:1px solid var(--line);background:var(--chip);border-radius:12px;padding:8px 10px;cursor:pointer}
+.retro[aria-pressed="true"]{border-color:var(--ink);box-shadow:inset 0 0 0 1px var(--ink)}
+.retro:disabled{opacity:.45;cursor:not-allowed}
+.retro .box{flex:none;width:18px;height:18px;border-radius:5px;border:2px solid var(--ink-2);margin-top:2px}
+.retro[aria-pressed="true"] .box{background:var(--ink);border-color:var(--ink)}
+.retro b{font-weight:700}
+.retro small{display:block;color:var(--ink-2);font-size:12.5px;line-height:1.35}
+.retro .cost{margin-left:auto;font-weight:700;font-variant-numeric:tabular-nums;white-space:nowrap}
+.res{display:grid;gap:8px}
+.res .name{font-weight:700;font-size:14px;margin-bottom:4px}
+.seg{display:grid;grid-template-columns:repeat(3,1fr);gap:4px}
+.seg button{border:1px solid var(--line);background:var(--chip);border-radius:10px;padding:7px 4px;font-size:12.5px;font-weight:600;cursor:pointer;line-height:1.2}
+.seg button[aria-pressed="true"]{background:var(--chip-on);color:var(--chip-on-ink);border-color:var(--chip-on)}
+.hint{font-size:12.5px;color:var(--ink-2);margin:6px 0 0}
+.lock{position:sticky;bottom:-16px;margin:16px -16px -16px;padding:12px 16px 16px;background:var(--panel);border-top:1px solid var(--line)}
+@media (max-width:820px){.lock{bottom:-14px;margin:14px -14px -14px;padding:10px 14px 14px}}
+.btn{display:block;width:100%;border:0;border-radius:14px;padding:13px 16px;font-weight:800;font-size:16px;cursor:pointer;background:var(--ink);color:var(--bg)}
+.btn.p1{background:#E63946;color:#fff}
+.btn.p2{background:#1D4ED8;color:#fff}
+.btn.ghost{background:transparent;border:1px solid var(--line);color:var(--ink);font-weight:700}
+
+.overlay{position:fixed;inset:0;z-index:6;display:none;align-items:center;justify-content:center;padding:calc(16px + env(safe-area-inset-top,0px)) 16px calc(16px + env(safe-area-inset-bottom,0px));background:rgba(26,21,34,.35)}
+.overlay.on{display:flex}
+.overlay.solid{background:var(--bg)}
+.sheet{width:100%;max-width:560px;max-height:100%;overflow-y:auto;background:var(--panel);border:1px solid var(--line);border-radius:22px;padding:22px;backdrop-filter:blur(14px);-webkit-backdrop-filter:blur(14px)}
+.sheet h1{margin:0;font-size:clamp(38px,11vw,56px);line-height:1;font-weight:800;letter-spacing:-.03em}
+.sheet .lede{font-size:17px;margin:10px 0 0;max-width:46ch}
+.sheet ol{margin:14px 0 18px;padding-left:20px;color:var(--ink-2)}
+.sheet ol li{margin:4px 0}
+.advisory{margin:14px 0 18px;border-radius:16px;overflow:hidden;border:1px solid var(--line)}
+.advisory .top{padding:10px 14px;color:#fff;font-weight:700;font-size:14px}
+.advisory .body{padding:12px 14px;background:var(--chip)}
+.advisory .body b{display:block;font-size:22px;line-height:1.2;font-weight:800}
+.advisory .body span{color:var(--ink-2);font-size:14px}
+.row2{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:10px}
+
+#intro{position:fixed;z-index:5;left:0;right:0;bottom:0;padding:0 20px calc(28px + env(safe-area-inset-bottom,0px));display:none;cursor:pointer;color:#fff;text-shadow:0 3px 0 #2A2233,0 0 24px rgba(0,0,0,.35)}
+#intro.on{display:block}
+#intro p{margin:0;font-weight:700;font-size:16px}
+#intro b{display:block;font-size:clamp(44px,9vw,92px);line-height:.95;font-weight:800;letter-spacing:-.03em;margin-top:4px}
+#intro span{display:block;font-size:clamp(16px,2.6vw,22px);font-weight:600;margin-top:8px}
+#intro small{display:inline-block;margin-top:14px;font-size:13px;font-weight:700;background:rgba(42,34,51,.55);padding:5px 10px;border-radius:999px;text-shadow:none}
+#callout{position:fixed;z-index:5;left:0;right:0;top:18%;text-align:center;pointer-events:none;opacity:0;transition:opacity .3s}
+#callout.on{opacity:1}
+#callout b{display:block;font-size:clamp(56px,13vw,136px);line-height:.95;font-weight:800;letter-spacing:-.03em;color:#fff;text-shadow:0 4px 0 #2A2233,0 0 30px rgba(0,0,0,.35)}
+#callout span{display:inline-block;margin-top:10px;background:#FFD166;color:#2A2233;font-weight:800;padding:6px 14px;border-radius:999px;font-size:18px}
+
+.versus{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:12px}
+@media (max-width:420px){.versus{grid-template-columns:1fr}}
+.pcard{border:1px solid var(--line);border-radius:14px;padding:10px 12px;background:var(--chip)}
+.pcard .head{display:flex;align-items:center;gap:8px;font-weight:800}
+.pcard .score{font-size:30px;font-weight:800;line-height:1.1;margin-top:4px;font-variant-numeric:tabular-nums}
+.pcard .score small{font-size:13px;color:var(--ink-2);font-weight:600}
+.pcard ul{margin:6px 0 0;padding-left:16px;font-size:13px}
+.pcard li{margin:2px 0}
+.st-ligtas{color:var(--good);font-weight:700}
+.st-sugatan{color:var(--mid);font-weight:700}
+.st-natrap{color:var(--warn);font-weight:700}
+.winner{margin-top:12px;padding:10px 12px;border-radius:12px;font-weight:800;text-align:center;font-size:17px}
+.why{margin:6px 0 0;padding-left:18px;font-size:13.5px}
+.why li{margin:4px 0}
+.err{position:fixed;inset:0;z-index:9;display:none;align-items:center;justify-content:center;padding:24px;text-align:center;background:var(--bg);font-size:16px}
+</style>
+</head>
+<body>
+<div id="sky"></div>
+<canvas id="stage" aria-label="Two floating island lots side by side with an evacuation center between them"></canvas>
+<div class="hud">
+  <div class="brand"><b>SingkaTibay</b><span id="hudInfo">Disaster-ready build battle</span></div>
+  <div class="timer" id="timer" aria-live="off">60</div>
+</div>
+<div id="intro" role="button" tabindex="0" aria-label="Skip the location flyover"><p id="introRound"></p><b id="introName"></b><span id="introSub"></span><small>Tap to skip</small></div>
+<div id="callout" aria-live="assertive"><b id="calloutBig"></b><span id="calloutSub"></span></div>
+<aside class="panel" id="panel" aria-live="polite"></aside>
+<div class="overlay" id="overlay"><div class="sheet" id="sheet" role="dialog" aria-modal="true"></div></div>
+<div class="err" id="err">The 3D view could not start. WebGL may be turned off in this browser.</div>
+
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
+<script>
+(function(){
+if(!window.THREE){document.getElementById('err').style.display='flex';return;}
+const reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+
+/* ---------------- Game data ---------------- */
+const BUDGET = 40, BUILD_SECONDS = 60, EVAC_SLOTS = 4;
+const ROUNDS = ['baha','lindol','bagyo'];
+const HZ = {
+  baha:{name:'Baha',en:'Flood',place:'Marikina riverside',agency:'PAGASA heavy rainfall warning',color:'#C0533F',call:'Baha!',note:'The Marikina River is rising. Striped blue tiles are low ground that floods first.'},
+  lindol:{name:'Lindol',en:'Earthquake',place:'Marikina Valley, along the West Valley Fault',agency:'PHIVOLCS earthquake advisory',color:'#8C4B2F',call:'Lindol!',note:'Striped orange tiles are liquefaction-prone ground that can turn soft when the shaking starts.'},
+  bagyo:{name:'Bagyo',en:'Typhoon',place:'the coast of Baler, Aurora',agency:'PAGASA tropical cyclone wind signal',color:'#3A5BA8',call:'Bagyo!',note:'Storm surge is expected along the shore. Striped blue tiles near the sea flood first.'}
+};
+const TEMPLATES = {
+  kubo:{name:'Bahay kubo',cost:0,W:2,Cq:2,Cw:2,floodRes:.3,floorLevel:1,storeys:1,roof:'nipa',wall:'bamboo',
+    desc:'Light bamboo house already on stilts. Cheap, but strong wind can tear it apart.'},
+  chb:{name:'Hollow-block house',cost:5,W:6,Cq:4,Cw:5,floodRes:.7,floorLevel:0,storeys:2,roof:'gi',wall:'chb',
+    desc:'The most common modern house. Often under-reinforced for earthquakes.'},
+  bato:{name:'Bahay na bato',cost:15,W:7,Cq:7,Cw:7,floodRes:.9,floorLevel:0,storeys:2,roof:'tile',wall:'stone',
+    desc:'Stone below, wood above. Tough all-round, but heavy and expensive.'}
+};
+const RETRO = [
+  {id:'brace',name:'Cross-bracing',cost:8,desc:'Stiffens the frame against shaking. Also steadies stilts.'},
+  {id:'posts',name:'Extra haligi posts',cost:6,desc:'More posts carrying the load.'},
+  {id:'columns',name:'Concrete columns',cost:10,only:['chb'],desc:'Reinforced corners for hollow-block walls. A bit heavier.'},
+  {id:'mat',name:'Mat foundation',cost:12,desc:'One wide slab under the house, so it doesn’t sink into weak ground.'},
+  {id:'stilts',name:'Raise on stilts',cost:10,not:['kubo'],desc:'Lifts every floor one level. Wobbly in earthquakes unless braced.'},
+  {id:'nipa',name:'Light nipa roof',cost:5,not:['kubo'],desc:'Much lighter roof, but it catches more wind.'},
+  {id:'stone',name:'Stone lower walls',cost:8,not:['bato'],desc:'Ground floor holds up in floods. Adds weight.'},
+  {id:'straps',name:'Roof straps',cost:6,desc:'Ties the roof down against wind. Bamboo can only be strapped so far.'}
+];
+const RESIDENTS = ['Lola Ising','Mang Ben','Bunso'];
+const ACTIONS = [['evac','Lumikas'],['dch','Duck, Cover, Hold'],['up','Akyat']];
+const STATUS = {ligtas:['Ligtas','safe',100],sugatan:['Sugatan','injured',40],natrap:['Na-trap','trapped, rescued later',20]};
+const ROMAN = {6:'VI',7:'VII',8:'VIII',9:'IX'};
+const RAIN_NAME = {1:'Orange',2:'Red'};
+
+/* ---------------- RNG and terrain ---------------- */
+function mulberry32(a){return function(){a|=0;a=a+0x6D2B79F5|0;let t=Math.imul(a^a>>>15,1|a);t=t+Math.imul(t^t>>>7,61|t)^t;return((t^t>>>14)>>>0)/4294967296;};}
+function makeTerrain(hz,rng){
+  for(let attempt=0;attempt<40;attempt++){
+    const T = [...Array(5)].map(()=>Array(5).fill('solid'));
+    const blob=(type,n,startRows)=>{
+      let c,r,tries=0;
+      do{c=Math.floor(rng()*5);r=startRows?startRows[Math.floor(rng()*startRows.length)]:Math.floor(rng()*5);tries++;}
+      while(T[c][r]!=='solid'&&tries<30);
+      T[c][r]=type; let placed=1, guard=0;
+      while(placed<n&&guard<200){
+        guard++;
+        const cells=[];for(let x=0;x<5;x++)for(let y=0;y<5;y++)if(T[x][y]===type)cells.push([x,y]);
+        const [x,y]=cells[Math.floor(rng()*cells.length)];
+        const d=[[1,0],[-1,0],[0,1],[0,-1]][Math.floor(rng()*4)];
+        const nx=x+d[0], ny=y+d[1];
+        if(nx>=0&&nx<5&&ny>=0&&ny<5&&T[nx][ny]==='solid'){T[nx][ny]=type;placed++;}
+      }
+    };
+    if(hz==='baha'){ for(let c=0;c<5;c++) if(rng()<.6) T[c][4]='low'; blob('low',4,[3,4]); blob('liq',2); }
+    else if(hz==='lindol'){ blob('liq',6); blob('liq',3); blob('low',2); }
+    else { for(let c=0;c<5;c++) if(rng()<.55) T[c][4]='low'; blob('low',3,[3,4]); blob('liq',2); }
+    let clean=0;
+    for(let ax=0;ax<4;ax++)for(let ar=0;ar<4;ar++){
+      if(fpTiles({ax,ar}).every(([c,r])=>T[c][r]==='solid')) clean++;
+    }
+    if(clean>=2&&clean<=7) return T;
+  }
+  return [...Array(5)].map(()=>Array(5).fill('solid'));
+}
+function mirror(T){return T.map((_,c)=>T[4-c].slice());}
+function fpTiles(a){return [[a.ax,a.ar],[a.ax+1,a.ar],[a.ax,a.ar+1],[a.ax+1,a.ar+1]];}
+
+/* ---------------- State ---------------- */
+let G = null;
+function newMatch(seed){
+  G = {seed, round:0, wins:[0,0], totals:[0,0], history:[]};
+  setupRound();
+}
+function setupRound(){
+  const hz = ROUNDS[G.round];
+  const rng = mulberry32(G.seed*31 + G.round*977 + 7);
+  const T1 = makeTerrain(hz,rng);
+  let band, actual;
+  if(hz==='lindol'){ const lo = rng()<.5?7:8; band=[lo,lo+1]; actual = lo+(rng()<.5?0:1); }
+  else if(hz==='baha'){ band=[1,2]; actual = rng()<.5?1:2; }
+  else { const lo = rng()<.5?3:4; band=[lo,lo+1]; actual = lo+(rng()<.5?0:1); }
+  G.hz = hz; G.band = band; G.actual = actual;
+  G.terrain = [T1, mirror(T1)];
+  G.picks = [blankPick(), blankPick()];
+  G.result = null;
+}
+function blankPick(){return {type:null, anchor:null, retro:new Set(), actions:['dch','dch','dch'], left:0, auto:false};}
+
+function stats(p){
+  const t = TEMPLATES[p.type]; const s = {W:t.W,Cq:t.Cq,Cw:t.Cw,floodRes:t.floodRes,floorLevel:t.floorLevel,storeys:t.storeys,roof:t.roof,wall:t.wall,mat:false};
+  const has = id=>p.retro.has(id);
+  if(has('brace')) s.Cq+=3;
+  if(has('posts')) s.Cq+=2;
+  if(has('columns')){ s.Cq+=3; s.W+=1; }
+  if(has('stilts')){ s.floorLevel+=1; if(!has('brace')) s.Cq-=2; }
+  if(has('nipa')){ s.W-=2; s.Cw-=1; s.roof='nipa'; }
+  if(has('stone')){ s.floodRes=Math.max(s.floodRes,.9); s.W+=2; s.wall='stone'; }
+  if(has('straps')) s.Cw+=3;
+  if(p.type==='kubo') s.Cw=Math.min(s.Cw,4);
+  if(has('mat')) s.mat=true;
+  s.Cq=Math.max(1,s.Cq); s.W=Math.max(1,s.W); s.Cw=Math.max(1,s.Cw);
+  return s;
+}
+function spent(p){
+  if(!p.type) return 0;
+  let n = TEMPLATES[p.type].cost;
+  p.retro.forEach(id=>{n += RETRO.find(r=>r.id===id).cost;});
+  return n;
+}
+function retroAllowed(r,type){
+  if(!type) return false;
+  if(r.only && !r.only.includes(type)) return false;
+  if(r.not && r.not.includes(type)) return false;
+  return true;
+}
+
+/* ---------------- Rules engine ---------------- */
+function evaluate(){
+  const hz = G.hz, A = G.actual;
+  const P = G.picks;
+  const atBorder = [P[0].anchor.ax===3, P[1].anchor.ax===0];
+  const evacOK=[[],[]], evacFull=[[],[]];
+  if(hz!=='lindol'){
+    let slots = EVAC_SLOTS;
+    const order = P[1].left > P[0].left ? [1,0] : [0,1];
+    order.forEach(pi=>P[pi].actions.forEach((a,i)=>{
+      if(a==='evac'){ if(slots>0){evacOK[pi][i]=true;slots--;} else evacFull[pi][i]=true; }
+    }));
+  }
+  return [0,1].map(pi=>{
+    const p = P[pi], s = stats(p), T = G.terrain[pi];
+    const tiles = fpTiles(p.anchor).map(([c,r])=>T[c][r]);
+    const onLiq = tiles.includes('liq'), onLow = tiles.includes('low');
+    const why = [], viol = [], anim = {};
+    let integ = 100;
+    const status = [];
+    const top = s.floorLevel + s.storeys - 1;
+
+    if(hz==='lindol'){
+      const k = {6:.5,7:.75,8:1.0,9:1.3}[A];
+      const r = s.W*k/s.Cq;
+      if(r<=.7) integ=100;
+      else if(r<=1.0) integ = 100-(r-.7)/.3*30;
+      else if(r<=1.3) integ = 70-(r-1)/.3*35;
+      else integ = 10;
+      anim.full = r>1.3; anim.upper = !anim.full && s.storeys>=2 && r>1.15; anim.tilt = r>.7 && !anim.full ? Math.min(.08,(r-.7)*.15) : 0;
+      if(anim.full) why.push('The frame couldn’t carry the house’s weight during the shaking, so it collapsed. Bracing, more posts, or a lighter roof spread the load.');
+      else if(anim.upper) why.push('The upper floor gave way. Heavy upper floors and roofs need a stiffer frame below them.');
+      else if(r>.7) why.push('The house took damage because its weight was close to what its frame could handle.');
+      else why.push('Light enough for its frame: the structure rode out the shaking.');
+      if(onLiq && !s.mat){ integ-=30; anim.sink=true; viol.push('Built on liquefaction-prone ground without a mat foundation'); why.push('The ground under the house turned soft during the shaking (liquefaction), so it sank and tilted. A wide mat foundation keeps a house from sinking.'); }
+      if(atBorder[0]&&atBorder[1]&&Math.abs(P[0].anchor.ar-P[1].anchor.ar)<=1){ integ-=10; anim.pound=true; viol.push('No gap at the shared border'); why.push('Both houses were built right on the shared border and slammed into each other. Neighboring buildings need space between them.'); }
+      p.actions.forEach(a=>{
+        if(a==='evac') status.push('sugatan');
+        else if(a==='dch') status.push(anim.full?'natrap':'ligtas');
+        else status.push(s.storeys>=2 ? ((anim.full||anim.upper)?'natrap':'sugatan') : (anim.full?'natrap':'ligtas'));
+      });
+      if(p.actions.includes('evac')) why.push('Running outside while the ground is shaking causes injuries. Duck, Cover, and Hold first, then evacuate once the shaking stops.');
+      if(p.actions.includes('up') && s.storeys>=2) why.push('Climbing stairs mid-earthquake is dangerous. Stay put and protect yourself where you are.');
+    }
+    else if(hz==='baha'){
+      const h = A + (onLow?1:0);
+      const sub = Math.max(0,Math.min(h - s.floorLevel, s.storeys));
+      integ = 100 - sub*(1-s.floodRes)*55;
+      if(h > s.floorLevel + s.storeys) integ -= 20;
+      anim.water = h;
+      if(onLow) why.push('The house sat on low ground, so the water there rose one level higher.');
+      if(onLow && s.floorLevel===0) viol.push('Built on low ground without raising the floor');
+      if(sub>0 && s.floodRes<.6) why.push('Bamboo walls fall apart in deep water. Stone lower walls hold up much better.');
+      if(sub===0) why.push('Every floor stayed above the water.');
+      p.actions.forEach((a,i)=>{
+        let act=a;
+        if(a==='evac'){ if(evacOK[pi][i]){status.push('ligtas');return;} act='dch'; }
+        if(act==='dch') status.push(h > s.floorLevel ? 'natrap':'ligtas');
+        else status.push(h > top ? 'natrap':'ligtas');
+      });
+      if(evacFull[pi].some(Boolean)) why.push('The evacuation center was already full. Whoever locks in first gets the spaces, so evacuate early.');
+      if(p.actions.some((a,i)=>a!=='evac'&&status[i]==='natrap')) why.push('People stayed on a floor the water reached. Evacuating early, or a higher floor, keeps them out of the water.');
+    }
+    else {
+      const kw = {3:3.5,4:5,5:6.5}[A];
+      const rw = kw/s.Cw;
+      if(rw<=.7) integ=100; else if(rw<=1) integ=100-(rw-.7)/.3*25; else integ = 50-Math.min(25,(rw-1)*50);
+      anim.roofLost = rw>1;
+      const h = onLow?1:0; anim.water = h;
+      const sub = Math.max(0,Math.min(h - s.floorLevel, s.storeys));
+      integ -= sub*(1-s.floodRes)*30;
+      if(anim.roofLost){ why.push('The wind tore the roof off. Roof straps and a heavier, anchored roof resist strong wind.'); if(!p.retro.has('straps')) viol.push('Roof not strapped down'); }
+      else why.push('The roof stayed on through the wind.');
+      if(onLow) why.push('Storm surge from the sea flooded the low ground near the shore.');
+      p.actions.forEach((a,i)=>{
+        let act=a;
+        if(a==='evac'){ if(evacOK[pi][i]){status.push('ligtas');return;} act='dch'; }
+        if(act==='dch') status.push(h > s.floorLevel ? 'natrap' : (anim.roofLost && rw>1.4 ? 'sugatan':'ligtas'));
+        else status.push(anim.roofLost ? 'sugatan' : (h > top ? 'natrap':'ligtas'));
+      });
+      if(evacFull[pi].some(Boolean)) why.push('The evacuation center was already full. Whoever locks in first gets the spaces, so evacuate early.');
+      if(anim.roofLost && p.actions.includes('up')) why.push('The top floor is the most exposed when a roof fails.');
+    }
+    integ = Math.max(5,Math.min(100,Math.round(integ)));
+    const lives = status.reduce((n,st)=>n+STATUS[st][2],0);
+    const lockBonus = Math.floor(p.left/10)*5;
+    const leftover = Math.floor((BUDGET-spent(p))*.5);
+    const score = lives + integ - viol.length*10 + lockBonus + leftover;
+    return {pi, s, integ, status, viol, why:why.slice(0,4), lives, lockBonus, leftover, score, anim, evacOK:evacOK[pi], evacFull:evacFull[pi]};
+  });
+}
+
+/* ---------------- Three.js scene ---------------- */
+const canvas = document.getElementById('stage');
+let renderer;
+try{ renderer = new THREE.WebGLRenderer({canvas,antialias:true,alpha:true}); }
+catch(e){ document.getElementById('err').style.display='flex'; return; }
+renderer.setPixelRatio(Math.min(window.devicePixelRatio||1,2));
+renderer.setClearColor(0x000000,0);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+
+const scene = new THREE.Scene();
+scene.fog = new THREE.Fog('#F6C3B0',34,95);
+const camera = new THREE.PerspectiveCamera(36,1,.1,260);
+camera.position.set(0,12.5,16.5);
+const controls = new THREE.OrbitControls(camera,canvas);
+controls.target.set(0,-.4,-1.1);
+controls.enableDamping = true; controls.enablePan = false;
+controls.minDistance = 9; controls.maxDistance = 30; controls.maxPolarAngle = 1.35;
+
+const hemi = new THREE.HemisphereLight('#FFD9C2','#6B5A8C',.5); scene.add(hemi);
+const sun = new THREE.DirectionalLight('#FFC79A',.9);
+sun.position.set(-9,12,8); sun.castShadow = true;
+sun.shadow.mapSize.set(1024,1024);
+Object.assign(sun.shadow.camera,{left:-10,right:10,top:10,bottom:-10,near:1,far:50});
+sun.shadow.bias = -.0008;
+scene.add(sun);
+
+const gradMap = new THREE.DataTexture(new Uint8Array([95,95,95,255,175,175,175,255,255,255,255,255]),3,1,THREE.RGBAFormat);
+gradMap.minFilter = gradMap.magFilter = THREE.NearestFilter; gradMap.generateMipmaps=false; gradMap.needsUpdate=true;
+const matCache = new Map();
+function tmat(color,opts){
+  const key = color + (opts?JSON.stringify(opts):'');
+  if(matCache.has(key)) return matCache.get(key);
+  const m = new THREE.MeshToonMaterial(Object.assign({color,gradientMap:gradMap},opts||{}));
+  matCache.set(key,m); return m;
+}
+const outlineMat = new THREE.MeshBasicMaterial({color:'#3D2E3A',side:THREE.BackSide});
+const unitBox = new THREE.BoxGeometry(1,1,1);
+function box(parent,color,sx,sy,sz,x,y,z,o){
+  o=o||{};
+  const m = new THREE.Mesh(unitBox, o.mat || tmat(color,o.emissive?{emissive:new THREE.Color(color),emissiveIntensity:o.emissive}:null));
+  m.scale.set(sx,sy,sz); m.position.set(x,y,z);
+  if(o.rx) m.rotation.x=o.rx; if(o.ry) m.rotation.y=o.ry; if(o.rz) m.rotation.z=o.rz;
+  m.castShadow = o.shadow!==false; m.receiveShadow = true;
+  parent.add(m);
+  if(o.outline!==false){
+    const ol = new THREE.Mesh(unitBox,outlineMat);
+    ol.scale.set(sx+.05,sy+.05,sz+.05); ol.position.copy(m.position); ol.rotation.copy(m.rotation);
+    parent.add(ol);
+  }
+  return m;
+}
+function stripeTex(a,b){
+  const c=document.createElement('canvas'); c.width=c.height=64; const g=c.getContext('2d');
+  g.fillStyle=a; g.fillRect(0,0,64,64); g.strokeStyle=b; g.lineWidth=9;
+  for(let i=-64;i<=128;i+=22){g.beginPath();g.moveTo(i,64);g.lineTo(i+64,0);g.stroke();}
+  const t=new THREE.CanvasTexture(c); return t;
+}
+const TILE_MAT = {
+  solid: tmat('#96CC7A'),
+  liq: new THREE.MeshToonMaterial({color:'#FFFFFF',map:stripeTex('#F06A4A','#FFE2C8'),gradientMap:gradMap}),
+  low: new THREE.MeshToonMaterial({color:'#FFFFFF',map:stripeTex('#3B82C4','#CFE6F7'),gradientMap:gradMap})
+};
+const lotX = (pi,c)=> pi===0 ? -4.6+c : 0.6+c;
+const lotZ = r=> -2+r;
+const islandX = pi=> pi===0 ? -2.6 : 2.6;
+const TEAM = ['#E63946','#1D4ED8'];
+
+const world = new THREE.Group(); scene.add(world);
+const tiles = [[],[]];
+const lots = [new THREE.Group(), new THREE.Group()];
+lots.forEach((g,pi)=>{
+  world.add(g);
+  const cx = islandX(pi);
+  for(let c=0;c<5;c++){ tiles[pi][c]=[]; for(let r=0;r<5;r++){
+    const m = new THREE.Mesh(unitBox,TILE_MAT.solid);
+    m.scale.set(.98,1,.98); m.position.set(lotX(pi,c),0,lotZ(r)); m.receiveShadow=true;
+    g.add(m); tiles[pi][c][r]=m;
+  }}
+  box(g,TEAM[pi],5.12,.12,.1,cx,.56,-2.55,{outline:false});
+  box(g,TEAM[pi],5.12,.12,.1,cx,.56,2.55,{outline:false});
+  box(g,TEAM[pi],.1,.12,5.12,cx-2.55,.56,0,{outline:false});
+  box(g,TEAM[pi],.1,.12,5.12,cx+2.55,.56,0,{outline:false});
+});
+// evacuation center
+const court = new THREE.Group(); world.add(court);
+box(court,'#E8D8B8',3.4,.5,2.2,0,.35,-4.4);
+[[-1.5,-5.3],[1.5,-5.3],[-1.5,-3.5],[1.5,-3.5]].forEach(([x,z])=>box(court,'#3D2E3A',.12,1.6,.12,x,1.4,z));
+box(court,'#FFD166',3.6,.14,2.4,0,2.25,-4.4);
+const SLOT_POS = [[-1.05,-4.1],[-.35,-4.1],[.35,-4.1],[1.05,-4.1],[-1.05,-4.75],[-.35,-4.75],[.35,-4.75],[1.05,-4.75]];
+
+/* ----- Landscapes: real places, stylized ----- */
+const LOC = {
+  baha:{name:'Marikina riverside',sub:'Metro Manila, along the Marikina River',kind:'river',water:'#4F94C9',waterY:-.25,
+    fly:[[-46,14,6],[-24,9,7.5],[-6,8,9],[11,10,14],[0,12.5,16.5]], look:[[-26,0,7],[-6,0,7],[3,0,3],[2,0,-1],[0,-.4,-1.1]]},
+  lindol:{name:'Marikina Valley',sub:'Along the West Valley Fault',kind:'valley',water:null,waterY:-4,
+    fly:[[-34,26,-36],[-10,15,-26],[14,11,-8],[12,10,12],[0,12.5,16.5]], look:[[0,0,-17],[6,0,-18],[0,0,-6],[1,0,-1],[0,-.4,-1.1]]},
+  bagyo:{name:'Baler, Aurora',sub:'Pacific coast, inspired by its beaches',kind:'beach',water:'#3FA7D6',waterY:-.2,
+    fly:[[-44,22,52],[-20,9,27],[14,6,15],[10,10,15],[0,12.5,16.5]], look:[[0,1,6],[0,1,4],[0,1,-1],[1,0,-1],[0,-.4,-1.1]]}
+};
+const nz = (x,z)=> Math.sin(x*.13+1.7)*Math.cos(z*.11-.4)*.5 + Math.sin(x*.051+z*.07+2)*.5;
+const sstep = (a,b,v)=>{ const t=Math.min(1,Math.max(0,(v-a)/(b-a))); return t*t*(3-2*t); };
+const FLAT = .45;
+function flatBlend(x,z){
+  const dx = Math.max(0,Math.abs(x)-6.6);
+  const dz = z<-6.8 ? -6.8-z : (z>3.4 ? z-3.4 : 0);
+  return sstep(0,5,Math.hypot(dx,dz));
+}
+const riverZ = x=> 7 + 1.6*Math.sin(x*.07+.5);
+const coastZ = x=> 9.5 + 1.5*Math.sin(x*.08);
+const faultS = (x,z)=> z - (-16 + .12*x);
+function rawHeight(kind,x,z){
+  let h = FLAT;
+  if(kind==='beach'){
+    const cz = coastZ(x);
+    if(z>3){ h = FLAT - (z-3)*.11; if(z>cz) h -= (z-cz)*.35; h=Math.max(h,-3.5); }
+    else h = FLAT + nz(x,z)*.15;
+    h += sstep(8,34,-z)*(7+4*nz(x,z));
+    h += sstep(24,42,x)*(z<cz?5:2.5)*(1+.3*nz(x,z));
+  } else if(kind==='river'){
+    const d = Math.abs(z-riverZ(x));
+    if(d<2.3) h = -1; else if(d<3.8) h = -1 + (d-2.3)/1.5*(FLAT+1); else h = FLAT + nz(x,z)*.1;
+    h += sstep(10,36,-z)*(4+2*nz(x,z));
+    if(z>riverZ(x)+3.8) h += sstep(0,24,z-riverZ(x)-3.8)*1.4;
+  } else {
+    h = FLAT + nz(x,z)*.08;
+    h += sstep(12,30,x)*(7+3*nz(x,z));
+    h += sstep(16,34,-x)*(3+2*nz(x,z));
+    h += sstep(14,38,-z)*(3+2*nz(x,z));
+    h += .9*(1-sstep(-.4,.4,faultS(x,z)));
+  }
+  return h;
+}
+function heightAt(kind,x,z){ const b = flatBlend(x,z); return FLAT*(1-b) + rawHeight(kind,x,z)*b; }
+function colorAt(kind,x,z,h){
+  if(kind==='beach'){
+    if(z>2.8 && h<1){ return h<-.15 ? '#D9BE8A' : '#F0D3A0'; }
+    if(h>7) return '#8E8A84';
+    return h>2.5 ? '#5E9E5C' : '#86C46E';
+  }
+  if(kind==='river'){
+    const d = Math.abs(z-riverZ(x));
+    if(d<2.3) return '#6E5A45';
+    if(d<3.8) return '#A68E6A';
+    if(h>2.5) return '#5E9E5C';
+    return '#8CC66F';
+  }
+  if(Math.abs(faultS(x,z))<.55 && h>.3 && h<2) return '#8A6A4A';
+  if(h>3) return h>6 ? '#4F8550' : '#6FAE62';
+  return ((Math.floor(x/3.5)+Math.floor(z/3.5))&1) ? '#9BD06E' : '#84C060';
+}
+const landMat = new THREE.MeshToonMaterial({vertexColors:true,gradientMap:gradMap});
+const plainMat = c=>tmat(c);
+let landscape = null, currentLoc = null;
+const seaMat = new THREE.MeshLambertMaterial({color:'#3FA7D6',transparent:true,opacity:.84,depthWrite:false});
+const seaGeo = new THREE.PlaneGeometry(170,170,70,70).rotateX(-Math.PI/2).toNonIndexed();
+const sea = new THREE.Mesh(seaGeo,seaMat);
+function waveSea(t,amp){
+  const pa = seaGeo.attributes.position;
+  for(let i=0;i<pa.count;i++){ const x=pa.getX(i), z=pa.getZ(i); pa.setY(i,amp*(Math.sin(x*.62+t*1.3)+Math.sin(z*.74-t*1.1)+.6*Math.sin((x+z)*.37+t*.7))*.4); }
+  pa.needsUpdate = true; seaGeo.computeVertexNormals();
+}
+sea.renderOrder = 2; scene.add(sea);
+function disposeGroup(g){ g.traverse(o=>{ if(o.geometry && o.geometry!==unitBox) o.geometry.dispose(); }); }
+function palm(g,x,z,rng){
+  const y = heightAt(currentLoc.kind,x,z), lean = (rng()-.5)*.5, dir = rng()*Math.PI*2;
+  const p = new THREE.Group(); p.position.set(x,y,z); p.rotation.y = dir; g.add(p);
+  let px=0,py=0;
+  for(let i=0;i<3;i++){
+    const seg = new THREE.Mesh(new THREE.CylinderGeometry(.09,.13,1.25,6),plainMat('#8A6B4A'));
+    seg.position.set(px+lean*.25*i,py+.6,0); seg.rotation.z = -lean*.35; seg.castShadow=true; p.add(seg);
+    px += lean*.35; py += 1.15;
+  }
+  for(let k=0;k<6;k++){
+    const leaf = new THREE.Mesh(unitBox,plainMat(k%2?'#3E9A4E':'#4FAE5A'));
+    leaf.scale.set(1.5,.05,.38);
+    const a = k/6*Math.PI*2;
+    leaf.position.set(px+Math.cos(a)*.65,py+.1,Math.sin(a)*.65);
+    leaf.rotation.set(0,-a,-.45); leaf.castShadow=true; p.add(leaf);
+  }
+}
+function buildLandscape(hz){
+  if(landscape){ scene.remove(landscape); disposeGroup(landscape); }
+  currentLoc = LOC[hz];
+  const kind = currentLoc.kind;
+  landscape = new THREE.Group(); scene.add(landscape);
+  const geo = new THREE.PlaneGeometry(170,170,110,110).rotateX(-Math.PI/2).toNonIndexed();
+  const pos = geo.attributes.position, cols = new Float32Array(pos.count*3), col = new THREE.Color();
+  for(let i=0;i<pos.count;i++){ const x=pos.getX(i), z=pos.getZ(i); pos.setY(i,heightAt(kind,x,z)-.06); }
+  for(let i=0;i<pos.count;i+=3){
+    const cx=(pos.getX(i)+pos.getX(i+1)+pos.getX(i+2))/3, cz=(pos.getZ(i)+pos.getZ(i+1)+pos.getZ(i+2))/3, cy=(pos.getY(i)+pos.getY(i+1)+pos.getY(i+2))/3;
+    col.set(colorAt(kind,cx,cz,cy));
+    for(let j=0;j<3;j++) cols.set([col.r,col.g,col.b],(i+j)*3);
+  }
+  geo.setAttribute('color',new THREE.BufferAttribute(cols,3));
+  geo.computeVertexNormals();
+  const land = new THREE.Mesh(geo,landMat); land.receiveShadow = true; landscape.add(land);
+  const rng = mulberry32(kind==='beach'?11:kind==='river'?22:33);
+  const clearOfPlay = (x,z)=> !(Math.abs(x)<7.4 && z>-7.4 && z<4.2) && Math.hypot(x*.8,z-17) > 12;
+  if(kind==='beach'){
+    let n=0, guard=0;
+    while(n<34 && guard<400){ guard++;
+      const x=(rng()-.5)*70, z = rng()<.6 ? 3.6+rng()*(coastZ(0)-5) : -7-rng()*10;
+      if(!clearOfPlay(x,z) || heightAt(kind,x,z)<.2) continue; palm(landscape,x,z,rng); n++; }
+    [[-14,0],[-9,.6],[16,-.4]].forEach(([x,rot])=>{
+      const z = coastZ(x)-1.4, y = heightAt(kind,x,z);
+      const b = new THREE.Group(); b.position.set(x,y+.15,z); b.rotation.y = rot; landscape.add(b);
+      box(b,'#F4F1E8',2.2,.3,.45,0,0,0); box(b,'#E63946',2.2,.08,.47,0,.12,0,{outline:false});
+      [-.75,.75].forEach(dz=>box(b,'#8A6B4A',2,.07,.07,0,-.05,dz,{outline:false}));
+      [-.6,.6].forEach(dx=>box(b,'#8A6B4A',.06,.06,1.5,dx,.05,0,{outline:false}));
+    });
+  } else if(kind==='river'){
+    const N = 70, inst = new THREE.InstancedMesh(unitBox,tmat('#FFFFFF'),N), m4=new THREE.Matrix4(), c=new THREE.Color();
+    const cpal = ['#E8E2D6','#D8CFC0','#C9D3DB','#F2D9B8','#BFC6CC','#E9C9B9'];
+    let n=0, guard=0;
+    while(n<N && guard<800){ guard++;
+      const x=(rng()-.5)*90, farBank = rng()<.65;
+      const z = farBank ? riverZ(x)+5+rng()*20 : -8-rng()*6;
+      if(!farBank && Math.abs(x)<10) continue;
+      if(!clearOfPlay(x,z)) continue;
+      const w=1.6+rng()*2.2, d=1.6+rng()*2.2, h=1+rng()*(farBank?6:3), y=heightAt(kind,x,z);
+      m4.compose(new THREE.Vector3(x,y+h/2,z),new THREE.Quaternion(),new THREE.Vector3(w,h,d));
+      inst.setMatrixAt(n,m4); inst.setColorAt(n,c.set(cpal[Math.floor(rng()*cpal.length)])); n++;
+    }
+    inst.count=n; inst.castShadow=true; inst.receiveShadow=true; landscape.add(inst);
+    const bx=-15, bz=riverZ(bx);
+    box(landscape,'#B8B2A8',2.4,.3,10,bx,.75,bz,{ry:-.11});
+    [-2.6,0,2.6].forEach(o=>box(landscape,'#8E8A84',.4,1.8,.4,bx,-.2,bz+o));
+    for(let i=0;i<10;i++){ const x=-40+i*8+rng()*3, z=riverZ(x)-3.1; if(Math.abs(x)<7) continue; palm(landscape,x,z,rng); }
+  } else {
+    const N=40, walls=new THREE.InstancedMesh(unitBox,tmat('#FFFFFF'),N), roofs=new THREE.InstancedMesh(new THREE.ConeGeometry(.95,.7,4,1),tmat('#FFFFFF'),N);
+    const m4=new THREE.Matrix4(), q=new THREE.Quaternion().setFromEuler(new THREE.Euler(0,Math.PI/4,0)), c=new THREE.Color();
+    let n=0, guard=0;
+    while(n<N && guard<800){ guard++;
+      const x=(rng()-.5)*50, z=(rng()-.5)*44;
+      if(!clearOfPlay(x,z) || Math.abs(faultS(x,z))<1.5) continue;
+      const y=heightAt('valley',x,z); if(y>1.6) continue;
+      m4.compose(new THREE.Vector3(x,y+.4,z),new THREE.Quaternion(),new THREE.Vector3(1.2,.8,1.2)); walls.setMatrixAt(n,m4); walls.setColorAt(n,c.set(['#F2E6D0','#E8D2B0','#D9DDE2'][n%3]));
+      m4.compose(new THREE.Vector3(x,y+1.15,z),q,new THREE.Vector3(1,1,1)); roofs.setMatrixAt(n,m4); roofs.setColorAt(n,c.set(['#C0533F','#8FA3B5','#C9A35C'][n%3]));
+      n++;
+    }
+    walls.count=roofs.count=n; [walls,roofs].forEach(o=>{o.castShadow=true; landscape.add(o);});
+    for(let i=0;i<14;i++){ const x=(rng()-.5)*60, z=-9-rng()*6; if(!clearOfPlay(x,z)) continue; const t=new THREE.Mesh(new THREE.SphereGeometry(.7+rng()*.5,7,6),tmat('#4E9A52')); t.position.set(x,heightAt('valley',x,z)+.8,z); t.castShadow=true; landscape.add(t); }
+  }
+  sea.visible = !!currentLoc.water;
+  if(currentLoc.water){ seaMat.color.set(currentLoc.water); sea.position.y = currentLoc.waterY; }
+}
+
+// water on individual low tiles
+const waterMat = new THREE.MeshToonMaterial({color:'#4FA3E0',gradientMap:gradMap,transparent:true,opacity:.62,depthWrite:false});
+// one merged mesh per lot: top faces plus only the outer walls of each flooded area, so no inner panes show
+const lowWater = [null,null];
+function buildLowWater(pi){
+  if(lowWater[pi]){ world.remove(lowWater[pi]); lowWater[pi].geometry.dispose(); lowWater[pi]=null; }
+  const T = G.terrain[pi], P = [], V = THREE.Vector3;
+  const isLow = (c,r)=> c>=0&&c<5&&r>=0&&r<5&&T[c][r]==='low';
+  const quad = (a,b,c,d,n)=>{
+    const ab=new V().subVectors(b,a), ac=new V().subVectors(c,a);
+    const pts = new V().crossVectors(ab,ac).dot(n)<0 ? [a,c,b,a,d,c] : [a,b,c,a,c,d];
+    pts.forEach(p=>P.push(p.x,p.y,p.z));
+  };
+  for(let c=0;c<5;c++) for(let r=0;r<5;r++){
+    if(!isLow(c,r)) continue;
+    const x0=lotX(pi,c)-.5, x1=x0+1, z0=lotZ(r)-.5, z1=z0+1;
+    quad(new V(x0,1,z0),new V(x1,1,z0),new V(x1,1,z1),new V(x0,1,z1),new V(0,1,0));
+    if(!isLow(c-1,r)) quad(new V(x0,0,z0),new V(x0,0,z1),new V(x0,1,z1),new V(x0,1,z0),new V(-1,0,0));
+    if(!isLow(c+1,r)) quad(new V(x1,0,z0),new V(x1,0,z1),new V(x1,1,z1),new V(x1,1,z0),new V(1,0,0));
+    if(!isLow(c,r-1)) quad(new V(x0,0,z0),new V(x1,0,z0),new V(x1,1,z0),new V(x0,1,z0),new V(0,0,-1));
+    if(!isLow(c,r+1)) quad(new V(x0,0,z1),new V(x1,0,z1),new V(x1,1,z1),new V(x0,1,z1),new V(0,0,1));
+  }
+  if(!P.length) return;
+  const geo = new THREE.BufferGeometry();
+  geo.setAttribute('position',new THREE.Float32BufferAttribute(P,3));
+  geo.computeVertexNormals();
+  const m = new THREE.Mesh(geo,waterMat);
+  m.position.y=.5; m.scale.y=.01; m.visible=false; m.renderOrder=3;
+  world.add(m); lowWater[pi]=m;
+}
+function resetWater(){
+  [0,1].forEach(buildLowWater);
+  if(currentLoc && currentLoc.water) sea.position.y = currentLoc.waterY;
+}
+// rain
+const rainGeo = new THREE.BufferGeometry();
+const RAIN_N = 420, rainPos = new Float32Array(RAIN_N*6);
+for(let i=0;i<RAIN_N;i++){ const x=(Math.random()-.5)*16, y=Math.random()*9, z=(Math.random()-.5)*12;
+  rainPos.set([x,y,z,x-.15,y-.5,z],i*6); }
+rainGeo.setAttribute('position',new THREE.BufferAttribute(rainPos,3));
+const rain = new THREE.LineSegments(rainGeo,new THREE.LineBasicMaterial({color:'#D6E6F5',transparent:true,opacity:.6}));
+rain.visible=false; scene.add(rain);
+
+/* ----- Houses and residents ----- */
+const houses = [null,null];
+const people = [[],[]];
+function personMesh(color){
+  const g = new THREE.Group();
+  const body = new THREE.Mesh(new THREE.CylinderGeometry(.1,.13,.32,10),tmat(color));
+  body.position.y=.16; body.castShadow=true; g.add(body);
+  const head = new THREE.Mesh(new THREE.SphereGeometry(.1,12,10),tmat('#E8B48A'));
+  head.position.y=.4; head.castShadow=true; g.add(head);
+  const ol1 = new THREE.Mesh(body.geometry,outlineMat); ol1.position.copy(body.position); ol1.scale.setScalar(1.15); g.add(ol1);
+  const ol2 = new THREE.Mesh(head.geometry,outlineMat); ol2.position.copy(head.position); ol2.scale.setScalar(1.15); g.add(ol2);
+  return g;
+}
+for(let pi=0;pi<2;pi++) for(let i=0;i<3;i++){ const m=personMesh(TEAM[pi]); m.visible=false; world.add(m); people[pi].push(m); }
+
+function buildHouse(pi){
+  if(houses[pi]){ world.remove(houses[pi].g); houses[pi]=null; }
+  const p = G.picks[pi];
+  if(!p.type || !p.anchor) { placePeople(pi,false); return; }
+  const s = stats(p), type = p.type, has = id=>p.retro.has(id);
+  const g = new THREE.Group(), lower = new THREE.Group(), upper = new THREE.Group(), roof = new THREE.Group();
+  g.add(lower); g.add(upper); g.add(roof);
+  const a = p.anchor;
+  const cx = (lotX(pi,a.ax)+lotX(pi,a.ax+1))/2, cz = (lotZ(a.ar)+lotZ(a.ar+1))/2;
+  g.position.set(cx,.5,cz);
+  let base = 0;
+  if(s.mat){ box(lower,'#A39E95',2.06,.14,2.06,0,.07,0); base=.14; }
+  else [[-.8,-.8],[.8,-.8],[-.8,.8],[.8,.8]].forEach(([x,z])=>box(lower,'#8D8478',.32,.12,.32,x,.06,z));
+  const H = .9, fl = s.floorLevel;
+  if(fl>0){
+    const pc = type==='kubo' ? '#B98C4A' : '#7A5241';
+    [[-.78,-.78],[.78,-.78],[-.78,.78],[.78,.78]].forEach(([x,z])=>box(lower,pc,.12,fl*H,.12,x,base+fl*H/2,z));
+    box(lower,pc,1.92,.08,1.92,0,base+fl*H-.04,0);
+    if(has('brace')){ const L=Math.hypot(1.56,fl*H), ang=Math.atan2(fl*H,1.56);
+      [-1,1].forEach(sd=>{ box(lower,'#E0A84E',.05,.07,L,sd*.8,base+fl*H/2,0,{rx:ang}); box(lower,'#E0A84E',.05,.07,L,sd*.8,base+fl*H/2,0,{rx:-ang}); }); }
+  }
+  for(let i=0;i<s.storeys;i++){
+    const y = base + (fl+i)*H, tgt = i===0 ? lower : upper;
+    let col = '#BFC3C9';
+    if(type==='kubo') col='#D8B26E';
+    if(type==='bato') col = i===0 ? '#C9BCA6' : '#9A6A45';
+    if(type==='chb') col = '#C2C6CC';
+    if(has('stone') && i===0) col='#C9BCA6';
+    const w = (type==='bato'&&i>0) ? 1.98 : 1.8;
+    box(tgt,col,w,.86,w,0,y+.43,0);
+    const winCol = (type==='bato'&&i>0) ? '#F6EBCF' : '#FFD27A';
+    [-.45,.45].forEach(x=>box(tgt,winCol,.32,.3,.04,x,y+.52,w/2+.02,{emissive:.35,outline:false}));
+    if(i===0) box(tgt,'#6E4D3E',.34,.55,.04,0,y+.28,w/2+.025,{outline:false});
+    if(has('brace')){ const L=Math.hypot(1.7,.8), ang=Math.atan2(.8,1.7);
+      [-1,1].forEach(sd=>{ box(tgt,'#E0A84E',.05,.07,L,sd*(w/2+.035),y+.43,0,{rx:ang,outline:false}); box(tgt,'#E0A84E',.05,.07,L,sd*(w/2+.035),y+.43,0,{rx:-ang,outline:false}); }); }
+    if(has('columns')) [[-.86,-.86],[.86,-.86],[-.86,.86],[.86,.86]].forEach(([x,z])=>box(tgt,'#8E949B',.22,.9,.22,x,y+.45,z));
+  }
+  const topY = base + (fl+s.storeys)*H;
+  if(has('posts')) [[-.97,-.97],[.97,-.97],[-.97,.97],[.97,.97]].forEach(([x,z])=>box(lower,'#5A3E2B',.13,topY-base,.13,x,base+(topY-base)/2,z));
+  const roofSpec = {nipa:['#C9A35C',1.1],tile:['#C0533F',.8],gi:['#8FA3B5',.55]}[s.roof];
+  const rad = type==='bato' ? 1.6 : 1.45;
+  const cone = new THREE.ConeGeometry(rad,roofSpec[1],4,1);
+  const rm = new THREE.Mesh(cone,tmat(roofSpec[0])); rm.rotation.y=Math.PI/4; rm.position.y=topY+roofSpec[1]/2; rm.castShadow=true; roof.add(rm);
+  const rol = new THREE.Mesh(cone,outlineMat); rol.rotation.y=Math.PI/4; rol.position.copy(rm.position); rol.scale.setScalar(1.05); roof.add(rol);
+  if(has('straps')) [Math.PI/4,-Math.PI/4].forEach(ry=>box(roof,'#2F2A2A',2.3,.05,.08,0,topY+.06,0,{ry,outline:false}));
+  world.add(g);
+  houses[pi] = {g,lower,upper,roof,s,base:g.position.clone()};
+  placePeople(pi,true);
+}
+function placePeople(pi,show){
+  const p = G.picks[pi];
+  people[pi].forEach((m,i)=>{
+    if(!show||!p.anchor){ m.visible=false; return; }
+    const a = p.anchor;
+    const r = a.ar+2<=4 ? a.ar+2 : a.ar-1;
+    const xs = [lotX(pi,a.ax)-.05, (lotX(pi,a.ax)+lotX(pi,a.ax+1))/2, lotX(pi,a.ax+1)+.05];
+    m.position.set(xs[i],.5,lotZ(r)); m.rotation.set(0,0,0); m.visible=true;
+  });
+}
+function paintTerrain(){
+  for(let pi=0;pi<2;pi++) for(let c=0;c<5;c++) for(let r=0;r<5;r++) tiles[pi][c][r].material = TILE_MAT[G.terrain[pi][c][r]];
+}
+
+/* ----- Sky phases ----- */
+const sky = document.getElementById('sky');
+const SKIES = {build:['#B9A3E3','#FBD3B0','#F6C3B0',.5,.9,'#FFC79A'], storm:['#2E3646','#6B7686','#5B6676',.35,.35,'#B8C4D6'], after:['#E7A9A0','#FCE2C2','#F6CDB4',.55,.8,'#FFC28A']};
+function setSky(k){ const s=SKIES[k]; sky.style.background='linear-gradient(to bottom,'+s[0]+','+s[1]+')'; scene.fog.color.set(s[2]); hemi.intensity=s[3]; sun.intensity=s[4]; sun.color.set(s[5]); }
+
+/* ---------------- UI ---------------- */
+const panel = document.getElementById('panel'), overlay = document.getElementById('overlay'), sheet = document.getElementById('sheet');
+const timerEl = document.getElementById('timer'), hudInfo = document.getElementById('hudInfo');
+const callout = document.getElementById('callout');
+let phase = 'title', active = 0, timerId = null, endAt = 0;
+
+function showOverlay(html,solid){ sheet.innerHTML = html; overlay.classList.add('on'); overlay.classList.toggle('solid',!!solid); panel.classList.remove('on'); const f = sheet.querySelector('button'); if(f) f.focus(); updateView(); }
+function hideOverlay(){ overlay.classList.remove('on'); }
+function hazardLine(){
+  if(G.hz==='lindol') return 'Intensity '+ROMAN[G.band[0]]+' to '+ROMAN[G.band[1]]+' shaking expected';
+  if(G.hz==='baha') return RAIN_NAME[1]+' to '+RAIN_NAME[2]+' rainfall warning';
+  return 'Signal No. '+G.band[0]+' to '+G.band[1];
+}
+function actualLine(){
+  if(G.hz==='lindol') return 'Intensity '+ROMAN[G.actual];
+  if(G.hz==='baha') return RAIN_NAME[G.actual]+' rainfall';
+  return 'Signal No. '+G.actual;
+}
+function setHud(){ const h=HZ[G.hz]; hudInfo.textContent = 'Round '+(G.round+1)+' of 3: '+h.name+' ('+h.en.toLowerCase()+')'; }
+
+function titleScreen(){
+  phase='title'; setSky('build');
+  hudInfo.textContent = 'Disaster-ready build battle';
+  showOverlay(
+    '<h1>SingkaTibay</h1>'+
+    '<p class="lede">Two players, one device. Each of you gets the same lot, the same budget, and the same warning. Build in secret, then watch both houses face the same disaster.</p>'+
+    '<ol><li>Pick a starting house and where to put it.</li><li>Spend your Pondo on retrofits.</li><li>Tell your 3 residents what to do when it hits.</li><li>Lives count most. Best of 3 rounds wins.</li></ol>'+
+    '<button class="btn" data-act="start">Start a match</button>'
+  );
+}
+function babalaScreen(){
+  phase='babala'; setSky('build'); setHud();
+  houses.forEach((h,pi)=>{ if(h) world.remove(h.g); houses[pi]=null; placePeople(pi,false); });
+  rain.visible=false;
+  buildLandscape(G.hz); resetWater();
+  paintTerrain();
+  startFly(()=>advisory());
+}
+function advisory(){
+  const h = HZ[G.hz];
+  showOverlay(
+    '<p class="sub">Round '+(G.round+1)+' of 3, '+h.place+'</p>'+
+    '<div class="advisory"><div class="top" style="background:'+h.color+'">'+h.agency+'</div>'+
+    '<div class="body"><b>'+h.name+': '+hazardLine()+'</b><span>'+h.note+' Exact strength is revealed when it hits.</span></div></div>'+
+    '<p class="sub">Player 1 builds on the left island, Player 2 on the right. The center platform is the shared evacuation center with '+EVAC_SLOTS+' spaces.</p>'+
+    '<div style="height:14px"></div><button class="btn p1" data-act="build0">Player 1: start building</button>'
+  );
+}
+function passScreen(){
+  phase='pass';
+  if(houses[0]){ houses[0].g.visible=false; } placePeople(0,false);
+  showOverlay('<h2>Pass the device to Player 2</h2><p class="lede">Player 1, no peeking. Player 2 gets the same lot (mirrored), budget, and warning.</p><div style="height:16px"></div><button class="btn p2" data-act="build1">Player 2: start building</button>', true);
+}
+
+function startBuild(pi){
+  phase='build'; active=pi; hideOverlay();
+  houses.forEach((h,i)=>{ if(h) h.g.visible = i===pi; });
+  placePeople(1-pi,false);
+  endAt = performance.now() + BUILD_SECONDS*1000;
+  timerEl.style.display='block';
+  clearInterval(timerId);
+  timerId = setInterval(()=>{
+    const left = Math.max(0,(endAt-performance.now())/1000);
+    timerEl.textContent = Math.ceil(left);
+    timerEl.classList.toggle('low',left<=10);
+    if(left<=0) lockIn();
+  },200);
+  renderBuild(); panel.classList.add('on'); panel.scrollTop=0; updateView();
+}
+function bars(v){ let h='<div class="bar">'; for(let i=1;i<=5;i++) h+='<i class="'+(v>=i-.25?'on':'')+'"></i>'; return h+'</div>'; }
+function renderBuild(){
+  const pi = active, p = G.picks[pi], T = G.terrain[pi];
+  const left = BUDGET - spent(p);
+  let h = '<div class="who"><span class="dot" style="background:'+TEAM[pi]+'"></span><h2>Player '+(pi+1)+'</h2></div>';
+  h += '<p class="sub">'+HZ[G.hz].name+': '+hazardLine()+'. Your lot is the '+(pi===0?'left':'right')+' island.</p>';
+  h += '<div class="pondo"><span>Pondo left</span><b>'+left+' / '+BUDGET+'</b></div>';
+  h += '<h3>Starting house</h3><div class="types">';
+  Object.entries(TEMPLATES).forEach(([id,t])=>{
+    h += '<button class="card" data-act="type" data-v="'+id+'" aria-pressed="'+(p.type===id)+'"><span class="row">'+t.name+'<span>'+(t.cost?t.cost+' Pondo':'Free')+'</span></span><p>'+t.desc+'</p></button>';
+  });
+  h += '</div>';
+  if(p.type){
+    const s = stats(p);
+    const lq = Math.max(0,Math.min(5,s.Cq/s.W*2.2));
+    const bh = Math.max(0,Math.min(5,s.floorLevel*1.5+s.storeys*.75+s.floodRes*2));
+    const bg = Math.max(0,Math.min(5,s.Cw/1.4));
+    h += '<div class="stats"><span>Lindol</span>'+bars(lq)+'<span>Baha</span>'+bars(bh)+'<span>Bagyo</span>'+bars(bg)+'</div>';
+  }
+  h += '<h3>Where to build</h3><div class="gridwrap">';
+  const lotHtml = (()=>{ let g='<div class="lot" role="group" aria-label="Your lot, 5 by 5 tiles">';
+    const fp = p.anchor ? fpTiles(p.anchor).map(t=>t.join(',')) : [];
+    for(let r=0;r<5;r++) for(let c=0;c<5;c++){
+      const t = T[c][r]; const lab = t==='liq'?'liquefaction-prone':t==='low'?'low ground':'solid ground';
+      g+='<button class="t-'+t+(fp.includes(c+','+r)?' fp':'')+'" data-act="tile" data-c="'+c+'" data-r="'+r+'" aria-label="Column '+(c+1)+', row '+(r+1)+', '+lab+'"></button>';
+    }
+    return g+'</div>'; })();
+  const borderHtml = '<div class="border">Shared border</div>';
+  h += pi===0 ? lotHtml+borderHtml : borderHtml+lotHtml;
+  h += '</div><div class="legend"><span><i class="t-solid"></i>Solid</span><span><i class="t-liq"></i>Liquefaction-prone</span><span><i class="t-low"></i>Low ground</span></div>';
+  h += '<p class="hint">Tap a tile to place your 2×2 house there.</p>';
+  h += '<h3>Retrofits</h3><div class="retros">';
+  RETRO.forEach(r=>{
+    if(!retroAllowed(r,p.type)) return;
+    const on = p.retro.has(r.id);
+    const dis = !on && r.cost>left;
+    h += '<button class="retro" data-act="retro" data-v="'+r.id+'" aria-pressed="'+on+'"'+(dis?' disabled':'')+'><span class="box"></span><span><b>'+r.name+'</b><small>'+r.desc+'</small></span><span class="cost">'+r.cost+'</span></button>';
+  });
+  if(!p.type) h += '<p class="hint">Pick a starting house to see its retrofits.</p>';
+  h += '</div>';
+  h += '<h3>Bayanihan</h3><div class="res">';
+  RESIDENTS.forEach((n,i)=>{
+    h += '<div><div class="name">'+n+'</div><div class="seg" role="group" aria-label="'+n+'">';
+    ACTIONS.forEach(([id,lab])=>{ h += '<button data-act="res" data-i="'+i+'" data-v="'+id+'" aria-pressed="'+(p.actions[i]===id)+'">'+lab+'</button>'; });
+    h += '</div></div>';
+  });
+  h += '</div><p class="hint">Lumikas: go to the evacuation center ('+EVAC_SLOTS+' spaces shared by both players, first to lock in goes first). Duck, Cover, Hold: stay low on the lowest floor. Akyat: go to the highest floor.</p>';
+  const ready = p.type && p.anchor;
+  h += '<div class="lock"><button class="btn '+(pi===0?'p1':'p2')+'" data-act="lock">'+(ready?'Lock in':'Lock in (house and spot get auto-picked)')+'</button></div>';
+  const st = panel.scrollTop; panel.innerHTML = h; panel.scrollTop = st;
+}
+
+function lockIn(){
+  if(phase!=='build') return;
+  clearInterval(timerId); timerEl.style.display='none';
+  const p = G.picks[active];
+  p.left = Math.max(0,Math.floor((endAt-performance.now())/1000));
+  if(!p.type){ p.type='chb'; p.auto=true; }
+  if(!p.anchor){ p.anchor={ax:1,ar:1}; p.auto=true; }
+  while(spent(p)>BUDGET){ const last=[...p.retro].pop(); p.retro.delete(last); }
+  buildHouse(active);
+  panel.classList.remove('on');
+  if(active===0) passScreen(); else runDisaster();
+}
+
+panel.addEventListener('click',e=>{
+  const b = e.target.closest('[data-act]'); if(!b||phase!=='build') return;
+  const p = G.picks[active], act = b.dataset.act;
+  if(act==='type'){
+    p.type = b.dataset.v;
+    [...p.retro].forEach(id=>{ if(!retroAllowed(RETRO.find(r=>r.id===id),p.type)) p.retro.delete(id); });
+    while(spent(p)>BUDGET){ const last=[...p.retro].pop(); p.retro.delete(last); }
+  } else if(act==='tile'){
+    p.anchor = {ax:Math.min(3,+b.dataset.c), ar:Math.min(3,+b.dataset.r)};
+  } else if(act==='retro'){
+    const id=b.dataset.v; if(p.retro.has(id)) p.retro.delete(id); else p.retro.add(id);
+  } else if(act==='res'){
+    p.actions[+b.dataset.i] = b.dataset.v;
+  } else if(act==='lock'){ lockIn(); return; }
+  buildHouse(active); renderBuild();
+});
+sheet.addEventListener('click',e=>{
+  const b = e.target.closest('[data-act]'); if(!b) return;
+  const act=b.dataset.act;
+  if(act==='start'){ newMatch(Math.floor(Math.random()*90000)+10000); babalaScreen(); }
+  else if(act==='build0') startBuild(0);
+  else if(act==='build1') startBuild(1);
+  else if(act==='again') titleScreen();
+});
+window.addEventListener('keydown',e=>{ if(e.key==='Escape' && phase==='build'){ /* keep playing */ } });
+
+/* ---------------- Disaster sequence ---------------- */
+let anim = null, anim_lowTiles = [[],[]];
+function runDisaster(){
+  phase='disaster'; hideOverlay(); panel.classList.remove('on'); updateView();
+  G.result = evaluate();
+  [0,1].forEach(pi=>{ buildHouse(pi); if(houses[pi]) houses[pi].g.visible=true; });
+  setSky('storm');
+  const slots = []; let si=0;
+  G.result.forEach(res=>res.evacOK.forEach((ok,i)=>{ if(ok) slots.push({pi:res.pi,i,slot:si++}); }));
+  [0,1].forEach(pi=>people[pi].forEach((m,i)=>{ if(!slots.find(s=>s.pi===pi&&s.i===i)) m.visible=false; }));
+  slots.forEach(s=>{ const m=people[s.pi][s.i]; m.userData.from=m.position.clone(); m.userData.to=new THREE.Vector3(SLOT_POS[s.slot][0],.05,SLOT_POS[s.slot][1]); });
+  document.getElementById('calloutBig').textContent = HZ[G.hz].call;
+  document.getElementById('calloutSub').textContent = actualLine();
+  callout.classList.add('on');
+  rain.visible = G.hz!=='lindol';
+  resetWater();
+  if(G.hz!=='lindol') lowWater.forEach(m=>{ if(m) m.visible=true; });
+  anim = {t0:performance.now(), dur:6000, slots};
+}
+function ease(t){return t<.5?2*t*t:1-Math.pow(-2*t+2,2)/2;}
+function stepAnim(now){
+  const t = (now-anim.t0)/1000, D = anim.dur/1000;
+  if(t>1.4) callout.classList.remove('on');
+  anim.slots.forEach(s=>{ const m=people[s.pi][s.i]; const k=ease(Math.min(1,Math.max(0,(t-.2)/1.4))); m.position.lerpVectors(m.userData.from,m.userData.to,k); m.position.y += Math.abs(Math.sin(t*14))*.06*(k<1?1:0); });
+  const hz = G.hz;
+  if(hz==='lindol'){
+    const amp = reduceMotion ? 0 : (t>.5&&t<4.5 ? .16*{6:.6,7:.8,8:1,9:1.25}[G.actual]*(1-(t-.5)/4) : 0);
+    world.position.set((Math.random()-.5)*amp,(Math.random()-.5)*amp*.3,(Math.random()-.5)*amp);
+  } else world.position.set(0,0,0);
+  if(hz!=='lindol'){
+    const arr = rainGeo.attributes.position.array;
+    for(let i=0;i<RAIN_N;i++){ let y=arr[i*6+1]-.32; if(y<-.5) y+=9; arr[i*6+1]=y; arr[i*6+4]=y-.5; arr[i*6]=arr[i*6+3]+.15; }
+    rainGeo.attributes.position.needsUpdate=true;
+  }
+  G.result.forEach(res=>{
+    const H = houses[res.pi]; if(!H) return;
+    const a = res.anim, k = ease(Math.min(1,Math.max(0,(t-1.4)/2)));
+    const dir = res.pi===0 ? -1 : 1;
+    if(hz==='lindol'){
+      H.g.position.y = H.base.y - (a.sink? .38*k : 0);
+      H.g.rotation.z = dir*((a.sink? .14 : 0) + a.tilt)*k;
+      if(a.full){ H.g.scale.y = 1 - .62*k; H.roof.rotation.z = dir*.5*k; }
+      if(a.upper){ H.upper.position.set(dir*1.1*k,-.9*k,0); H.upper.rotation.z = dir*1.1*k; H.roof.position.set(dir*1.6*k,-1.3*k,0); H.roof.rotation.z = dir*1.4*k; }
+    } else {
+      const kw = ease(Math.min(1,Math.max(0,(t-1)/2.4)));
+      if(hz==='baha'){
+        sea.position.y = currentLoc.waterY + (.5 + G.actual*.9 - currentLoc.waterY)*kw;
+        const hgt = (G.actual+1)*.9*kw;
+        if(lowWater[res.pi]) lowWater[res.pi].scale.y = Math.max(.01,hgt);
+      } else {
+        sea.position.y = currentLoc.waterY + (.42 - currentLoc.waterY)*kw;
+        const hgt = .9*kw;
+        if(lowWater[res.pi]) lowWater[res.pi].scale.y = Math.max(.01,hgt);
+      }
+      if(hz==='bagyo'){
+        H.g.rotation.z = reduceMotion?0:Math.sin(t*9+res.pi)*.025*(t<5?1:0);
+        if(a.roofLost){ const kr = ease(Math.min(1,Math.max(0,(t-2)/1.8))); H.roof.position.set(dir*5*kr,3.5*kr,-1*kr); H.roof.rotation.set(1.4*kr,0,dir*2*kr); H.roof.visible = kr<.98; }
+      }
+    }
+  });
+  if(t>=D){ anim=null; world.position.set(0,0,0); rain.visible=false; setSky('after'); showResults(); }
+}
+
+function showResults(){
+  phase='results';
+  const R = G.result;
+  const w = R[0].score===R[1].score ? -1 : (R[0].score>R[1].score?0:1);
+  if(w>=0) G.wins[w]++;
+  G.totals[0]+=R[0].score; G.totals[1]+=R[1].score;
+  G.history.push({hz:G.hz, scores:[R[0].score,R[1].score]});
+  let h = '<h2>'+HZ[G.hz].name+' results</h2><p class="sub">'+actualLine()+' hit '+HZ[G.hz].place+'.</p>';
+  h += '<div class="versus">';
+  R.forEach(res=>{
+    const p = G.picks[res.pi];
+    h += '<div class="pcard"><div class="head"><span class="dot" style="background:'+TEAM[res.pi]+'"></span>Player '+(res.pi+1)+'</div>';
+    h += '<div class="score">'+res.score+' <small>points</small></div>';
+    h += '<p class="sub" style="font-size:13px">'+TEMPLATES[p.type].name+(p.auto?' (auto-picked)':'')+', '+res.integ+'% intact</p>';
+    h += '<ul>'; RESIDENTS.forEach((n,i)=>{ const st=res.status[i]; h += '<li>'+n+': <span class="st-'+st+'">'+STATUS[st][0]+'</span> ('+STATUS[st][1]+')'+(res.evacFull[i]?', center was full':'')+'</li>'; }); h += '</ul>';
+    if(res.viol.length){ h += '<ul>'; res.viol.forEach(v=>{ h += '<li class="st-natrap">−10: '+v+'</li>'; }); h += '</ul>'; }
+    h += '<p class="sub" style="font-size:12.5px;margin-top:6px">Lives '+res.lives+', building '+res.integ+', lock-in bonus '+res.lockBonus+', leftover Pondo '+res.leftover+'</p>';
+    h += '<h3 style="margin-top:10px;font-size:14px">Bakit?</h3><ul class="why">'; res.why.forEach(x=>{ h += '<li>'+x+'</li>'; }); h += '</ul>';
+    h += '</div>';
+  });
+  h += '</div>';
+  const best = R.find(r=>r.integ>=85);
+  h += '<div class="winner" style="background:'+(w<0?'var(--chip)':TEAM[w])+';color:'+(w<0?'var(--ink)':'#fff')+'">'+(w<0?'Tabla! This round is a draw.':'Player '+(w+1)+' wins the round'+(best&&best.pi===w?'. Ang tibay!':'.'))+'</div>';
+  h += '<p class="sub" style="text-align:center;margin-top:6px">Rounds won: Player 1, '+G.wins[0]+'. Player 2, '+G.wins[1]+'.</p>';
+  const last = G.round>=2 || G.wins[0]===2 || G.wins[1]===2;
+  h += '<div class="lock"><button class="btn" data-act="next">'+(last?'See the match result':'Next round')+'</button></div>';
+  panel.innerHTML = h; panel.classList.add('on'); panel.scrollTop=0; updateView();
+  const nb = panel.querySelector('[data-act="next"]');
+  nb.addEventListener('click',()=>{ if(last) finalScreen(); else { G.round++; setupRound(); babalaScreen(); } });
+  nb.focus({preventScroll:true});
+}
+function finalScreen(){
+  phase='final';
+  let w = G.wins[0]===G.wins[1] ? (G.totals[0]===G.totals[1]?-1:(G.totals[0]>G.totals[1]?0:1)) : (G.wins[0]>G.wins[1]?0:1);
+  let h = '<h1 style="font-size:44px">'+(w<0?'It’s a draw':'Player '+(w+1)+' wins')+'</h1>';
+  h += '<p class="lede">Rounds won: '+G.wins[0]+' to '+G.wins[1]+'. Total points: '+G.totals[0]+' to '+G.totals[1]+'.</p><ul style="margin:12px 0 18px;padding-left:20px;color:var(--ink-2)">';
+  G.history.forEach((r,i)=>{ h += '<li>Round '+(i+1)+', '+HZ[r.hz].name+': '+r.scores[0]+' to '+r.scores[1]+'</li>'; });
+  h += '</ul><button class="btn" data-act="again">Play again with a new map</button>';
+  panel.classList.remove('on');
+  showOverlay(h);
+}
+
+/* ---------------- View sizing ---------------- */
+function updateView(){
+  const w = window.innerWidth, h = window.innerHeight;
+  renderer.setSize(w,h,false);
+  camera.aspect = w/h;
+  camera.fov = w<h ? 58 : 36;
+  if(panel.classList.contains('on')){
+    if(w>820) camera.setViewOffset(w,h,(390+24)/2,0,w,h);
+    else camera.setViewOffset(w,h,0,Math.min(panel.offsetHeight,h*.56)/2,w,h);
+  } else camera.clearViewOffset();
+  camera.updateProjectionMatrix();
+}
+window.addEventListener('resize',updateView);
+
+const intro = document.getElementById('intro');
+let fly = null;
+function setGameCam(){ camera.position.set(0,12.5,16.5); controls.target.set(0,-.4,-1.1); controls.update(); }
+function startFly(done){
+  document.getElementById('introRound').textContent = 'Round '+(G.round+1)+' of 3';
+  document.getElementById('introName').textContent = currentLoc.name;
+  document.getElementById('introSub').textContent = currentLoc.sub;
+  hideOverlay(); panel.classList.remove('on'); updateView();
+  if(reduceMotion){ setGameCam(); done(); return; }
+  const v = a=>new THREE.Vector3(a[0],a[1],a[2]);
+  fly = {pc:new THREE.CatmullRomCurve3(currentLoc.fly.map(v)), lc:new THREE.CatmullRomCurve3(currentLoc.look.map(v)), elapsed:0, last:null, dur:5600, done};
+  controls.enabled = false; intro.classList.add('on'); intro.focus({preventScroll:true});
+}
+function endFly(){
+  if(!fly) return;
+  const d = fly.done; fly = null;
+  intro.classList.remove('on'); controls.enabled = true; setGameCam(); d();
+}
+intro.addEventListener('click',endFly);
+canvas.addEventListener('pointerdown',()=>{ if(fly) endFly(); });
+window.addEventListener('keydown',e=>{ if(fly && (e.key===' '||e.key==='Enter'||e.key==='Escape')){ e.preventDefault(); endFly(); } });
+function tick(now){
+  if(anim) stepAnim(now);
+  if(fly){
+    if(fly.last!==null) fly.elapsed += Math.min(50, now-fly.last);
+    fly.last = now;
+    const t = Math.min(1,fly.elapsed/fly.dur), e = ease(t);
+    camera.position.copy(fly.pc.getPointAt(e)); camera.lookAt(fly.lc.getPointAt(e));
+    if(t>=1) endFly();
+  } else controls.update();
+  if(!anim && currentLoc && currentLoc.kind==='beach' && sea.visible && phase!=='results') sea.position.y = currentLoc.waterY + Math.sin(now/900)*.06;
+  if(sea.visible) waveSea(now/1000, (anim && G.hz!=='lindol') || phase==='results' ? .45 : .14);
+  renderer.render(scene,camera);
+  requestAnimationFrame(tick);
+}
+newMatch(12345); buildLandscape('baha'); paintTerrain(); setGameCam();
+updateView(); titleScreen(); requestAnimationFrame(tick);
+})();
+</script>
+</body>
+</html>
