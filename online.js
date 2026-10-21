@@ -35,5 +35,43 @@ async function signIn(email, password){
 }
 async function signOut(){ if(client) await client.auth.signOut(); }
 
-window.SingkaNet = {enabled, client, session, user, signUp, signIn, signOut};
+/* ----- Rooms ----- */
+async function rpc(fn, args){
+  await session();
+  const res = await client.rpc(fn, args || {});
+  if(res.error) throw new Error(res.error.message);
+  return res.data;
+}
+// Build timers run on server time, so both devices count down to the same moment.
+let clockOffset = 0;
+async function syncClock(){
+  const t0 = Date.now(), s = await rpc('server_now'), t1 = Date.now();
+  clockOffset = Date.parse(s) - (t0 + t1) / 2;
+}
+const serverTime = ()=> Date.now() + clockOffset;
+async function getRoom(id){
+  const res = await client.from('rooms').select('*').eq('id', id).single();
+  if(res.error) throw new Error(res.error.message);
+  return res.data;
+}
+function watchRoom(id, onChange){
+  const ch = client.channel('room-' + id)
+    .on('postgres_changes', {event:'UPDATE', schema:'public', table:'rooms', filter:'id=eq.' + id}, p=>onChange(p.new))
+    .subscribe();
+  return ()=>client.removeChannel(ch);
+}
+async function names(ids){
+  const res = await client.from('profiles').select('id,display_name').in('id', ids.filter(Boolean));
+  const out = {};
+  (res.data || []).forEach(r=>{ out[r.id] = r.display_name; });
+  return out;
+}
+async function setName(name){
+  const s = await session();
+  const res = await client.from('profiles').update({display_name:name}).eq('id', s.user.id);
+  if(res.error) throw new Error(res.error.message);
+}
+
+window.SingkaNet = {enabled, client, session, user, signUp, signIn, signOut,
+  rpc, syncClock, serverTime, getRoom, watchRoom, names, setName};
 })();

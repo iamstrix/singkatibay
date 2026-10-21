@@ -141,6 +141,16 @@ h3{margin:18px 0 8px;font-size:16px;font-weight:800}
 .why{margin:6px 0 0;padding-left:18px;font-size:13.5px}
 .why li{margin:4px 0}
 .err{position:fixed;inset:0;z-index:9;display:none;align-items:center;justify-content:center;padding:24px;text-align:center;background:var(--bg);font-size:16px}
+.code{margin:8px 0 0;text-align:center;font-size:clamp(36px,11vw,52px);font-weight:800;letter-spacing:.14em;font-variant-numeric:tabular-nums}
+.qr{width:200px;margin:12px auto 0;padding:10px;border-radius:14px;background:#fff}
+.qr svg{display:block;width:100%;height:auto}
+.note{margin:8px 0 0;text-align:center;font-size:13.5px;color:var(--ink-2);overflow-wrap:anywhere}
+.note.bad{color:var(--warn);font-weight:700}
+.field{display:block;margin:14px 0 0}
+.field span{display:block;margin-bottom:4px;font-size:13px;color:var(--ink-2)}
+.field input{width:100%;padding:10px 12px;border:1px solid var(--line);border-radius:12px;background:var(--chip);color:var(--ink);font:inherit;font-size:18px}
+.field input:focus-visible{outline:3px solid var(--gold);outline-offset:1px}
+.field input.codein{text-align:center;text-transform:uppercase;letter-spacing:.2em;font-weight:800}
 </style>
 </head>
 <body>
@@ -159,6 +169,7 @@ h3{margin:18px 0 8px;font-size:16px;font-weight:800}
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/build/three.min.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/three@0.147.0/examples/js/controls/OrbitControls.js"></script>
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2.117.3/dist/umd/supabase.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/qrcode-generator@1.4.4/qrcode.js"></script>
 <script src="config.js"></script>
 <script src="online.js"></script>
 <script>
@@ -288,7 +299,9 @@ function evaluate(){
   const evacOK=[[],[]], evacFull=[[],[]];
   if(hz!=='lindol'){
     let slots = EVAC_SLOTS;
-    const order = P[1].left > P[0].left ? [1,0] : [0,1];
+    // online picks carry the server's lock-in time; pass-and-play falls back to seconds left
+    const p2First = P[0].lockT!=null && P[1].lockT!=null ? P[1].lockT < P[0].lockT : P[1].left > P[0].left;
+    const order = p2First ? [1,0] : [0,1];
     order.forEach(pi=>P[pi].actions.forEach((a,i)=>{
       if(a==='evac'){ if(slots>0){evacOK[pi][i]=true;slots--;} else evacFull[pi][i]=true; }
     }));
@@ -780,14 +793,16 @@ function actualLine(){
 function setHud(){ const h=HZ[G.hz]; hudInfo.textContent = 'Round '+(G.round+1)+' of 3: '+h.name+' ('+h.en.toLowerCase()+')'; }
 
 function titleScreen(){
+  leaveRoom();
   phase='title'; setSky('build');
   hudInfo.textContent = 'Disaster-ready build battle';
   showOverlay(
     '<h1>SingkaTibay</h1>'+
-    '<p class="lede">Two players, one device. Each of you gets the same lot, the same budget, and the same warning. Build in secret, then watch both houses face the same disaster.</p>'+
+    '<p class="lede">Two players, on one device or online. Each of you gets the same lot, the same budget, and the same warning. Build in secret, then watch both houses face the same disaster.</p>'+
     '<ol><li>Pick a starting house and where to put it.</li><li>Spend your Pondo on retrofits.</li><li>Tell your 3 residents what to do when it hits.</li><li>Lives count most. Best of 3 rounds wins.</li></ol>'+
     '<p class="hint" style="margin:-6px 0 16px">Drag to look around. Ctrl + drag (two fingers on a phone) to move across the map.</p>'+
-    '<button class="btn" data-act="start">Start a match</button>'
+    '<button class="btn" data-act="start">Pass and play on this device</button>'+
+    (window.SingkaNet && SingkaNet.enabled ? '<div class="row2"><button class="btn ghost" data-act="host">Create online room</button><button class="btn ghost" data-act="joinform">Join with code</button></div>' : '')
   );
 }
 function babalaScreen(){
@@ -804,9 +819,13 @@ function advisory(){
     '<p class="sub">Round '+(G.round+1)+' of 3, '+h.place+'</p>'+
     '<div class="advisory"><div class="top" style="background:'+h.color+'">'+h.agency+'</div>'+
     '<div class="body"><b>'+h.name+': '+hazardLine()+'</b><span>'+h.note+' Exact strength is revealed when it hits.</span></div></div>'+
-    '<p class="sub">Player 1 builds on the left island, Player 2 on the right. The center platform is the shared evacuation center with '+EVAC_SLOTS+' spaces.</p>'+
-    '<div style="height:14px"></div><button class="btn p1" data-act="build0">Player 1: start building</button>'
+    '<p class="sub">'+(online ? 'You build on the '+(online.me===0?'left':'right')+' island, '+esc(pname(1-online.me))+' on the other.' : 'Player 1 builds on the left island, Player 2 on the right.')+
+    ' The center platform is the shared evacuation center with '+EVAC_SLOTS+' spaces.</p>'+
+    '<div style="height:14px"></div>'+
+    (online ? '<button class="btn '+(online.me===0?'p1':'p2')+'" id="startIn" disabled>Building starts soon</button>'
+            : '<button class="btn p1" data-act="build0">Player 1: start building</button>')
   );
+  if(online) startCountdown();
 }
 function passScreen(){
   phase='pass';
@@ -818,7 +837,7 @@ function startBuild(pi){
   phase='build'; active=pi; hideOverlay();
   houses.forEach((h,i)=>{ if(h) h.g.visible = i===pi; });
   placePeople(1-pi,false);
-  endAt = performance.now() + BUILD_SECONDS*1000;
+  endAt = performance.now() + (online ? buildDeadline() - SingkaNet.serverTime() : BUILD_SECONDS*1000);
   timerEl.style.display='block';
   clearInterval(timerId);
   timerId = setInterval(()=>{
@@ -833,7 +852,7 @@ function bars(v){ let h='<div class="bar">'; for(let i=1;i<=5;i++) h+='<i class=
 function renderBuild(){
   const pi = active, p = G.picks[pi], T = G.terrain[pi];
   const left = BUDGET - spent(p);
-  let h = '<div class="who"><span class="dot" style="background:'+TEAM[pi]+'"></span><h2>Player '+(pi+1)+'</h2></div>';
+  let h = '<div class="who"><span class="dot" style="background:'+TEAM[pi]+'"></span><h2>'+esc(pname(pi))+'</h2></div>';
   h += '<p class="sub">'+HZ[G.hz].name+': '+hazardLine()+'. Your lot is the '+(pi===0?'left':'right')+' island.</p>';
   h += '<div class="pondo"><span>Pondo left</span><b>'+left+' / '+BUDGET+'</b></div>';
   h += '<h3>Starting house</h3><div class="types">';
@@ -891,7 +910,8 @@ function lockIn(){
   while(spent(p)>BUDGET){ const last=[...p.retro].pop(); p.retro.delete(last); }
   buildHouse(active);
   panel.classList.remove('on');
-  if(active===0) passScreen(); else runDisaster();
+  if(online) sendLockIn(p);
+  else if(active===0) passScreen(); else runDisaster();
 }
 
 panel.addEventListener('click',e=>{
@@ -917,6 +937,18 @@ sheet.addEventListener('click',e=>{
   else if(act==='build0') startBuild(0);
   else if(act==='build1') startBuild(1);
   else if(act==='again') titleScreen();
+  else if(act==='host') hostRoom();
+  else if(act==='joinform') joinForm('');
+  else if(act==='startMatch') netCall('start_round',{p_room:online.room.id,p_round:0});
+  else if(act==='copy') copyLink(b);
+  else if(act==='leave') titleScreen();
+});
+sheet.addEventListener('submit',e=>{
+  e.preventDefault();
+  if(e.target.id==='joinFormEl') joinRoom(document.getElementById('codeIn').value);
+});
+sheet.addEventListener('change',e=>{
+  if(e.target.id==='nameIn') saveName(e.target.value);
 });
 window.addEventListener('keydown',e=>{ if(e.key==='Escape' && phase==='build'){ /* keep playing */ } });
 
@@ -994,7 +1026,7 @@ function showResults(){
   h += '<div class="versus">';
   R.forEach(res=>{
     const p = G.picks[res.pi];
-    h += '<div class="pcard"><div class="head"><span class="dot" style="background:'+TEAM[res.pi]+'"></span>Player '+(res.pi+1)+'</div>';
+    h += '<div class="pcard"><div class="head"><span class="dot" style="background:'+TEAM[res.pi]+'"></span>'+esc(pname(res.pi))+'</div>';
     h += '<div class="score">'+res.score+' <small>points</small></div>';
     h += '<p class="sub" style="font-size:13px">'+TEMPLATES[p.type].name+(p.auto?' (auto-picked)':'')+', '+res.integ+'% intact</p>';
     h += '<ul>'; RESIDENTS.forEach((n,i)=>{ const st=res.status[i]; h += '<li>'+n+': <span class="st-'+st+'">'+STATUS[st][0]+'</span> ('+STATUS[st][1]+')'+(res.evacFull[i]?', center was full':'')+'</li>'; }); h += '</ul>';
@@ -1005,24 +1037,219 @@ function showResults(){
   });
   h += '</div>';
   const best = R.find(r=>r.integ>=85);
-  h += '<div class="winner" style="background:'+(w<0?'var(--chip)':TEAM[w])+';color:'+(w<0?'var(--ink)':'#fff')+'">'+(w<0?'Tabla! This round is a draw.':'Player '+(w+1)+' wins the round'+(best&&best.pi===w?'. Ang tibay!':'.'))+'</div>';
-  h += '<p class="sub" style="text-align:center;margin-top:6px">Rounds won: Player 1, '+G.wins[0]+'. Player 2, '+G.wins[1]+'.</p>';
+  h += '<div class="winner" style="background:'+(w<0?'var(--chip)':TEAM[w])+';color:'+(w<0?'var(--ink)':'#fff')+'">'+(w<0?'Tabla! This round is a draw.':esc(pname(w))+' wins the round'+(best&&best.pi===w?'. Ang tibay!':'.'))+'</div>';
+  h += '<p class="sub" style="text-align:center;margin-top:6px">Rounds won: '+esc(pname(0))+', '+G.wins[0]+'. '+esc(pname(1))+', '+G.wins[1]+'.</p>';
   const last = G.round>=2 || G.wins[0]===2 || G.wins[1]===2;
   h += '<div class="lock"><button class="btn" data-act="next">'+(last?'See the match result':'Next round')+'</button></div>';
   panel.innerHTML = h; panel.classList.add('on'); panel.scrollTop=0; updateView();
   const nb = panel.querySelector('[data-act="next"]');
-  nb.addEventListener('click',()=>{ if(last) finalScreen(); else { G.round++; setupRound(); babalaScreen(); } });
+  nb.addEventListener('click',()=>{
+    if(last) finalScreen();
+    else if(online){
+      nb.disabled = true; nb.textContent = 'Waiting for '+pname(1-online.me)+'…';
+      netCall('start_round',{p_room:online.room.id,p_round:G.round+1});
+    }
+    else { G.round++; setupRound(); babalaScreen(); }
+  });
   nb.focus({preventScroll:true});
 }
 function finalScreen(){
   phase='final';
   let w = G.wins[0]===G.wins[1] ? (G.totals[0]===G.totals[1]?-1:(G.totals[0]>G.totals[1]?0:1)) : (G.wins[0]>G.wins[1]?0:1);
-  let h = '<h1 style="font-size:44px">'+(w<0?'It’s a draw':'Player '+(w+1)+' wins')+'</h1>';
+  let h = '<h1 style="font-size:44px">'+(w<0?'It’s a draw':esc(pname(w))+' wins')+'</h1>';
   h += '<p class="lede">Rounds won: '+G.wins[0]+' to '+G.wins[1]+'. Total points: '+G.totals[0]+' to '+G.totals[1]+'.</p><ul style="margin:12px 0 18px;padding-left:20px;color:var(--ink-2)">';
   G.history.forEach((r,i)=>{ h += '<li>Round '+(i+1)+', '+HZ[r.hz].name+': '+r.scores[0]+' to '+r.scores[1]+'</li>'; });
-  h += '</ul><button class="btn" data-act="again">Play again with a new map</button>';
+  h += '</ul><button class="btn" data-act="again">'+(online?'Back to the title screen':'Play again with a new map')+'</button>';
   panel.classList.remove('on');
   showOverlay(h);
+}
+
+/* ---------------- Online rooms ---------------- */
+// Both devices run the same seed and the same rules. The server only stores builds,
+// keeps them secret until both players lock in, and records who locked in first.
+let online = null;   // {room, uid, me, names, unwatch, poll, revealing}
+let countdownId = null;
+const esc = s=>String(s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+function pname(pi){
+  if(!online) return 'Player '+(pi+1);
+  const n = online.names[pi===0 ? online.room.host : online.room.guest];
+  return (n && n!=='Guest' ? n : 'Player '+(pi+1)) + (pi===online.me ? ' (you)' : '');
+}
+const buildDeadline = ()=> Date.parse(online.room.build_start) + BUILD_SECONDS*1000;
+const joinLink = code=> location.origin + location.pathname + '?room=' + code;
+const matchOver = ()=> G.round>=2 || G.wins[0]===2 || G.wins[1]===2;
+
+function netError(e){
+  haltPlay();
+  showOverlay('<h2>Connection problem</h2><p class="lede">'+esc(e && e.message || e)+'</p><div style="height:16px"></div><button class="btn" data-act="leave">Back to the title screen</button>');
+}
+function netCall(fn,args){ SingkaNet.rpc(fn,args).then(syncOnline).catch(netError); }
+// stops anything still counting down so it can't act on a room that is gone
+function haltPlay(){
+  phase='halted'; clearInterval(timerId); clearInterval(countdownId); timerEl.style.display='none';
+  panel.classList.remove('on'); anim=null; world.position.set(0,0,0);
+  if(fly){ fly=null; intro.classList.remove('on'); controls.enabled=true; setGameCam(); }
+}
+
+async function hostRoom(){
+  showOverlay('<h2>Creating a room…</h2>');
+  try{
+    const s = await SingkaNet.session(); await SingkaNet.syncClock();
+    enterRoom(await SingkaNet.rpc('create_room'), s.user.id);
+  }catch(e){ netError(e); }
+}
+function joinForm(code,msg){
+  phase='joinform';
+  showOverlay('<h2>Join a room</h2><form id="joinFormEl">'+
+    '<label class="field"><span>Room code</span><input id="codeIn" class="codein" maxlength="6" autocomplete="off" autocapitalize="characters" spellcheck="false" value="'+esc(code)+'"></label>'+
+    (msg ? '<p class="note bad" role="alert">'+esc(msg)+'</p>' : '')+
+    '<div class="row2" style="margin-top:16px"><button class="btn ghost" type="button" data-act="leave">Back</button><button class="btn" type="submit">Join</button></div></form>');
+  document.getElementById('codeIn').focus();
+}
+async function joinRoom(code){
+  code = String(code||'').trim().toUpperCase();
+  if(code.length!==6){ joinForm(code,'Room codes are 6 letters and numbers.'); return; }
+  showOverlay('<h2>Joining room '+esc(code)+'…</h2>');
+  try{
+    const s = await SingkaNet.session(); await SingkaNet.syncClock();
+    enterRoom(await SingkaNet.rpc('join_room',{p_code:code}), s.user.id);
+  }catch(e){ joinForm(code,e.message); }
+}
+function enterRoom(room,uid){
+  stopRoom();
+  online = {room, uid, me: room.host===uid ? 0 : 1, names:{}, revealing:false};
+  online.unwatch = SingkaNet.watchRoom(room.id, syncOnline);
+  online.poll = setInterval(pollRoom, 3000);   // backup in case a realtime update is missed
+  history.replaceState(null,'',location.pathname);
+  phase='lobby'; renderLobby();
+  refreshNames().then(()=>{ if(phase==='lobby') renderLobby(); });
+}
+async function refreshNames(){
+  if(!online) return;
+  try{ online.names = await SingkaNet.names([online.room.host, online.room.guest]); }catch(e){}
+}
+function qrSvg(text){
+  if(!window.qrcode) return '';
+  const q = qrcode(0,'M'); q.addData(text); q.make();
+  return q.createSvgTag({cellSize:4, margin:2, scalable:true, alt:'QR code that opens this room'});
+}
+function renderLobby(){
+  const r = online.room, isHost = online.me===0;
+  const mine = online.names[online.uid];
+  let h = '<p class="sub" style="text-align:center">Room code</p><div class="code">'+esc(r.code)+'</div>';
+  if(isHost && !r.guest){
+    h += '<div class="qr">'+qrSvg(joinLink(r.code))+'</div>';
+    h += '<p class="note">Scan to join, or open '+esc(location.host+location.pathname)+' and enter the code.</p>';
+    h += '<p class="note"><b>Waiting for a player to join…</b></p>';
+  } else {
+    h += '<p class="note"><b>'+(isHost ? esc(pname(1))+' joined.' : 'You joined '+esc(pname(0))+'’s room.')+'</b></p>';
+  }
+  h += '<label class="field"><span>Your name</span><input id="nameIn" maxlength="24" autocomplete="nickname" placeholder="Player '+(online.me+1)+'" value="'+esc(mine && mine!=='Guest' ? mine : '')+'"></label>';
+  h += '<div style="height:16px"></div>';
+  if(isHost && r.guest) h += '<button class="btn p1" data-act="startMatch">Start match</button><div style="height:8px"></div>';
+  if(isHost && !r.guest) h += '<button class="btn ghost" data-act="copy">Copy invite link</button><div style="height:8px"></div>';
+  if(!isHost) h += '<p class="note" style="margin:0 0 12px">Waiting for the host to start the match.</p>';
+  h += '<button class="btn ghost" data-act="leave">Leave room</button>';
+  showOverlay(h);
+}
+function copyLink(b){
+  const link = joinLink(online.room.code);
+  (navigator.clipboard ? navigator.clipboard.writeText(link) : Promise.reject())
+    .then(()=>{ b.textContent='Invite link copied'; })
+    .catch(()=>{ b.textContent=link; });
+}
+function saveName(v){
+  v = v.trim().slice(0,24);
+  if(!v || !online) return;
+  online.names[online.uid] = v;
+  SingkaNet.setName(v).catch(()=>{});
+}
+
+async function pollRoom(){
+  if(!online) return;
+  try{
+    let r = await SingkaNet.getRoom(online.room.id);
+    // the opponent went quiet after the timer ran out: end the round without them
+    if(phase==='waiting' && r.status==='build' && SingkaNet.serverTime() > buildDeadline()+20000)
+      r = await SingkaNet.rpc('claim_timeout',{p_room:r.id,p_round:r.round});
+    syncOnline(r);
+  }catch(e){ /* try again on the next poll */ }
+}
+function syncOnline(r){
+  if(!online || !r || r.id!==online.room.id) return;
+  const guestChanged = r.guest!==online.room.guest;
+  online.room = r;
+  if(r.status==='closed'){
+    if(phase==='final' || (phase==='results' && matchOver())) return;
+    stopRoom(); haltPlay();
+    showOverlay('<h2>The room was closed</h2><p class="lede">Your opponent left the match.</p><div style="height:16px"></div><button class="btn" data-act="leave">Back to the title screen</button>');
+    return;
+  }
+  if(phase==='lobby'){
+    if(r.status==='build') refreshNames().then(()=>{ if(online && phase==='lobby'){ newMatch(r.seed); babalaScreen(); } });
+    else if(guestChanged) refreshNames().then(()=>{ if(online && phase==='lobby') renderLobby(); });
+    return;
+  }
+  if(phase==='results' && r.status==='build' && r.round===G.round+1){ G.round=r.round; setupRound(); babalaScreen(); return; }
+  if(phase==='waiting' && r.status==='reveal' && r.round===G.round) reveal();
+}
+function startCountdown(){
+  clearInterval(countdownId);
+  const step = ()=>{
+    if(!online || phase!=='babala'){ clearInterval(countdownId); return; }
+    const ms = Date.parse(online.room.build_start) - SingkaNet.serverTime();
+    if(ms<=0){ clearInterval(countdownId); startBuild(online.me); return; }
+    const b = document.getElementById('startIn');
+    if(b) b.textContent = 'Building starts in '+Math.ceil(ms/1000);
+  };
+  countdownId = setInterval(step,200); step();
+}
+function sendLockIn(p){
+  phase='waiting';
+  showOverlay('<h2>Locked in</h2><p class="lede">Waiting for '+esc(pname(1-online.me))+' to lock in…</p><div style="height:16px"></div><button class="btn ghost" data-act="leave">Leave match</button>');
+  const pick = {type:p.type, anchor:p.anchor, retro:[...p.retro], actions:p.actions, auto:!!p.auto};
+  // if this fails (e.g. the round already timed out), the next poll picks up the room state
+  SingkaNet.rpc('lock_in',{p_room:online.room.id,p_round:G.round,p_pick:pick}).then(syncOnline).catch(pollRoom);
+}
+// Builds come from the other device, so check everything against the rules before using it.
+function pickFrom(raw,lockedAt,buildStart){
+  raw = raw && typeof raw==='object' ? raw : {};
+  const p = blankPick();
+  p.auto = !!raw.auto;
+  if(TEMPLATES.hasOwnProperty(raw.type)) p.type = raw.type; else { p.type='chb'; p.auto=true; }
+  const a = raw.anchor || {};
+  if([a.ax,a.ar].every(v=>Number.isInteger(v) && v>=0 && v<=3)) p.anchor = {ax:a.ax, ar:a.ar};
+  else { p.anchor = {ax:1, ar:1}; p.auto=true; }
+  (Array.isArray(raw.retro) ? raw.retro : []).forEach(id=>{ const r=RETRO.find(x=>x.id===id); if(r && retroAllowed(r,p.type)) p.retro.add(id); });
+  while(spent(p)>BUDGET){ const last=[...p.retro].pop(); p.retro.delete(last); }
+  const acts = Array.isArray(raw.actions) ? raw.actions : [];
+  p.actions = [0,1,2].map(i=>ACTIONS.some(([id])=>id===acts[i]) ? acts[i] : 'dch');
+  p.lockT = Date.parse(lockedAt);
+  p.left = Math.max(0,Math.min(BUILD_SECONDS,Math.floor(BUILD_SECONDS-(p.lockT-Date.parse(buildStart))/1000)));
+  return p;
+}
+async function reveal(){
+  if(online.revealing) return;
+  online.revealing = true;
+  try{
+    const rows = await SingkaNet.rpc('get_picks',{p_room:online.room.id,p_round:G.round});
+    if(!online) return;
+    online.revealing = false;
+    if(!rows || rows.length<2 || phase!=='waiting') return;
+    rows.forEach(row=>{ G.picks[row.player] = pickFrom(row.pick,row.locked_at,row.build_start); });
+    runDisaster();
+  }catch(e){ if(online) online.revealing = false; }
+}
+function stopRoom(){
+  if(!online) return;
+  online.unwatch(); clearInterval(online.poll); clearInterval(countdownId);
+  online = null;
+}
+function leaveRoom(){
+  if(!online) return;
+  const id = online.room.id;
+  stopRoom();
+  SingkaNet.rpc('leave_room',{p_room:id}).catch(()=>{});
 }
 
 /* ---------------- View sizing ---------------- */
@@ -1076,6 +1303,9 @@ function tick(now){
 }
 newMatch(12345); buildLandscape('baha'); paintTerrain(); setGameCam();
 updateView(); titleScreen(); requestAnimationFrame(tick);
+// a scanned QR code opens ?room=CODE: join straight away
+const roomParam = new URLSearchParams(location.search).get('room');
+if(roomParam && window.SingkaNet && SingkaNet.enabled) joinRoom(roomParam);
 })();
 </script>
 </body>
